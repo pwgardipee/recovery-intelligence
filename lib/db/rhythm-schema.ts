@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   doublePrecision,
   index,
@@ -100,8 +101,15 @@ export const consentRecords = pgTable(
     }).notNull(),
     active: boolean("active").default(true).notNull(),
     notes: text("notes"),
+    // Bridge to whoop_connections.whoopUserId so advice generation can read
+    // real Whoop data (sleep / recovery / workouts / cycles) for this stay
+    // instead of the mock payload that used to seed rw_signals.
+    whoopUserId: bigint("whoop_user_id", { mode: "number" }),
   },
-  (t) => [index("rw_consent_stay_idx").on(t.stayId)],
+  (t) => [
+    index("rw_consent_stay_idx").on(t.stayId),
+    index("rw_consent_whoop_user_idx").on(t.whoopUserId),
+  ],
 );
 
 // Pre-arrival intake collected from either the 7-day email reply, the

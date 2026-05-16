@@ -6,7 +6,6 @@ import { whoopConnections } from "@/lib/db/schema";
 import {
   consentRecords,
   messages,
-  signals,
   stays,
 } from "@/lib/db/rhythm-schema";
 import {
@@ -166,37 +165,20 @@ export async function GET(request: NextRequest) {
         .where(eq(stays.id, stayId))
         .limit(1);
       if (stay) {
+        // Bridge: store the Whoop user_id directly so advice generation
+        // (lib/whoop/snapshot.ts) can read real data for this stay without
+        // any string parsing of `notes`.
         await db.insert(consentRecords).values({
           stayId,
           source: "whoop",
           autoDisconnectAt: stay.checkOut,
+          whoopUserId: profile.user_id,
           notes: `Real Whoop OAuth · user_id ${profile.user_id}`,
         });
 
-        // Seed two demo signal snapshots so downstream prompts have shape.
-        await db.insert(signals).values([
-          {
-            guestId: stay.guestId,
-            source: "whoop",
-            capturedAt: new Date(stay.checkIn.getTime() - 1000 * 60 * 60 * 18),
-            payload: {
-              sleepMinutes: 288,
-              sleepQuality: "fragmented",
-              travelStrain: "high",
-              recoveryBand: "low",
-            },
-          },
-          {
-            guestId: stay.guestId,
-            source: "whoop",
-            capturedAt: new Date(stay.checkIn.getTime() - 1000 * 60 * 60 * 4),
-            payload: {
-              sleepMinutes: 312,
-              travelStrain: "high",
-              recoveryBand: "low",
-            },
-          },
-        ]);
+        // No mock rw_signals inserts — runScene4ArrivalBrief now reads from
+        // the real whoop_* tables via buildWhoopSnapshot(). The 30-day
+        // backfill above populates those tables in the background.
 
         // Append a consent_strip + Rose line to the staff thread.
         const [{ next }] = await db

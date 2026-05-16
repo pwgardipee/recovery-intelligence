@@ -1,4 +1,5 @@
 import { anthropic, isAnthropicConfigured, MODELS } from "./anthropic";
+import type { WhoopSnapshot } from "@/lib/whoop/snapshot";
 
 /**
  * Rosewood Rhythm prompt library.
@@ -232,6 +233,25 @@ Voice rules:
   sentence ONLY: "warmer room, gentler pacing today/tomorrow." NEVER any
   cycle terminology. Null otherwise. Never expose the underlying flag's name.
 - If occasion is set (e.g., "anniversary"), the delightMomentIdea is real.
+
+Snapshot-aware tuning (use the SIGNAL SUMMARY to drive these choices):
+- If the summary mentions a recent workout / effort:
+  - Include a refuel-style amenity in roomPrep.amenities — protein-forward
+    light bite, electrolytes, fresh fruit, salted nuts — anchored to the
+    property's larder where natural.
+  - Stock a clean workout towel + the property's signature bath product
+    near the shower.
+  - Add a "first 20 minutes of quiet to refuel and shower" beat to staffDo
+    when intensity sounds full.
+  - serviceMode tilts toward "warm_attentive" if the effort was full and
+    energy is on the lower side; "balanced" if effort was moderate.
+- If the summary mentions a fuller rest overnight AND energy is open to a
+  fuller day, serviceMode may be "balanced" with optional fuller offers.
+- If the summary mentions short rest and lower energy, serviceMode is
+  "low_touch" — quieter check-in, room option first.
+- "firstOffer" should reflect the snapshot. After a full effort: lead with
+  a quick refuel + a hot shower; after short rest: lead with the room and
+  a light dinner. Never name the effort or the metric.
 `.trim();
 
 interface BriefInput {
@@ -583,4 +603,133 @@ export function translateSignalsToHospitality(payload: {
   if (payload.cycleComfortMode) parts.push("comfort mode requested (warmer room, gentler pacing)");
   if (parts.length === 0) return "no notable signals today; default to balanced pacing.";
   return parts.join("; ") + ".";
+}
+
+/**
+ * Pre-translates a real Whoop snapshot (sleep + recovery + cycle + workouts)
+ * into hospitality language. This is the firewall: the brief/daily prompts
+ * never see numbers, sport names by themselves, or any clinical phrasing.
+ *
+ * Output is a small bag of named lines so the brief prompt can pick which
+ * to weave in. We intentionally stay terse — Rose's voice, not a report.
+ */
+export function translateWhoopSnapshotToHospitality(
+  snapshot: WhoopSnapshot,
+  options: { cycleComfortMode?: boolean } = {},
+): {
+  summary: string;
+  energyLine: string | null;
+  sleepLine: string | null;
+  workoutLine: string | null;
+  refuelCue: string | null;
+  comfortLine: string | null;
+} {
+  const parts: string[] = [];
+
+  // Sleep last night
+  let sleepLine: string | null = null;
+  if (snapshot.sleep?.band === "short") {
+    sleepLine = "short rest overnight; soften the morning";
+    parts.push(sleepLine);
+  } else if (snapshot.sleep?.band === "partial") {
+    sleepLine = "partial rest overnight";
+    parts.push(sleepLine);
+  } else if (snapshot.sleep?.band === "fuller") {
+    sleepLine = "a fuller rest overnight";
+    parts.push(sleepLine);
+  }
+
+  // Recovery / energy band today
+  let energyLine: string | null = null;
+  if (snapshot.recovery?.band === "low") {
+    energyLine = "energy is on the lower side today";
+    parts.push(energyLine);
+  } else if (snapshot.recovery?.band === "mid") {
+    energyLine = "energy is steady";
+    parts.push(energyLine);
+  } else if (snapshot.recovery?.band === "high") {
+    energyLine = "energy is open to a fuller day";
+    parts.push(energyLine);
+  } else if (snapshot.recovery?.band === "calibrating") {
+    energyLine = "still settling into a baseline";
+    parts.push(energyLine);
+  }
+
+  // Most recent workout in last ~24h (workout-aware hospitality)
+  let workoutLine: string | null = null;
+  let refuelCue: string | null = null;
+  const w = snapshot.derived.recentWorkout;
+  if (w) {
+    const hoursAgo = w.endedHoursAgo;
+    const when =
+      hoursAgo <= 1
+        ? "just finished"
+        : hoursAgo <= 4
+          ? `finished about ${hoursAgo}h ago`
+          : hoursAgo <= 12
+            ? "earlier today"
+            : "yesterday";
+    const intensity =
+      w.strainBand === "very_hard"
+        ? "a very full effort"
+        : w.strainBand === "hard"
+          ? "a full effort"
+          : w.strainBand === "moderate"
+            ? "a moderate effort"
+            : "a light effort";
+    const sport = describeSport(w.sportName);
+    workoutLine = `${when} ${sport} — ${intensity}`;
+    parts.push(workoutLine);
+
+    if (snapshot.derived.workoutNeedsRefuel) {
+      refuelCue =
+        "after the effort: have protein, electrolytes, and a salty light snack ready in-room; warmer shower amenities welcome";
+      parts.push("refueling cues are appropriate on arrival");
+    } else if (intensity !== "a light effort") {
+      refuelCue =
+        "after the effort: hydration and a light protein-forward bite would land well in-room";
+    }
+  }
+
+  // Cycle strain (full day load even without a discrete workout)
+  if (!w && snapshot.derived.heavyStrainToday) {
+    parts.push("a heavier day on the body overall — pace down the evening");
+  }
+
+  // Cycle comfort flag (from intake), passed through here for one-stop summary
+  let comfortLine: string | null = null;
+  if (options.cycleComfortMode) {
+    comfortLine = "comfort mode requested (warmer room, gentler pacing)";
+    parts.push(comfortLine);
+  }
+
+  const summary =
+    parts.length === 0
+      ? "no notable signals today; default to balanced pacing."
+      : parts.join("; ") + ".";
+
+  return { summary, energyLine, sleepLine, workoutLine, refuelCue, comfortLine };
+}
+
+function describeSport(sportName: string): string {
+  // Map raw sport_name strings to soft, hospitality-friendly verbs.
+  // We never expose the raw enum to the prompt or UI.
+  const key = sportName.trim().toLowerCase();
+  if (key.includes("run")) return "a run";
+  if (key.includes("cycl") || key.includes("ride") || key.includes("bike"))
+    return "a ride";
+  if (key.includes("swim")) return "a swim";
+  if (key.includes("yoga")) return "a yoga session";
+  if (key.includes("pilates")) return "a pilates session";
+  if (key.includes("hike") || key.includes("walk")) return "a long walk";
+  if (key.includes("strength") || key.includes("weight") || key.includes("lift"))
+    return "a strength session";
+  if (key.includes("row")) return "a rowing session";
+  if (key.includes("tennis")) return "a tennis match";
+  if (key.includes("golf")) return "a round of golf";
+  if (key.includes("ski") || key.includes("snowboard")) return "time on the mountain";
+  if (key.includes("hiit") || key.includes("crossfit") || key.includes("functional"))
+    return "an interval workout";
+  // Generic fallback that still feels like Rose, not a tracker.
+  return "a workout";
 }

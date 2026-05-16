@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
@@ -17,7 +17,9 @@ import {
   generateDailyRhythm,
   interpretIntake,
   translateSignalsToHospitality,
+  translateWhoopSnapshotToHospitality,
 } from "@/lib/ai/prompts";
+import { buildWhoopSnapshot } from "@/lib/whoop/snapshot";
 
 /**
  * Demo scene engine.
@@ -353,16 +355,59 @@ async function runScene4ArrivalBrief(stayId: number): Promise<void> {
     .orderBy(asc(intakeAnswers.id))
     .limit(1);
 
-  const guestSignals = await db
-    .select()
-    .from(signals)
-    .where(eq(signals.guestId, stay.guestId))
-    .orderBy(asc(signals.capturedAt))
-    .limit(5);
+  const intakeAnswered: Record<string, unknown> | null = intake
+    ? (intake.answers as Record<string, unknown>)
+    : null;
+  const cycleComfortMode = Array.isArray(intakeAnswered?.comfortFlags)
+    ? (intakeAnswered.comfortFlags as string[]).includes("cycle_comfort")
+    : false;
 
-  const signalSummary = guestSignals
-    .map((s) => translateSignalsToHospitality(s.payload as Record<string, unknown>))
-    .join(" ");
+  // Prefer real Whoop data: read the stay's most recent active consent for
+  // a Whoop user, snapshot the integration tables, and translate that into
+  // hospitality language. Fall back to mock rw_signals only if there's no
+  // connected Whoop user yet, so the demo never goes blank.
+  const [whoopConsent] = await db
+    .select()
+    .from(consentRecords)
+    .where(
+      and(
+        eq(consentRecords.stayId, stayId),
+        eq(consentRecords.source, "whoop"),
+        eq(consentRecords.active, true),
+      ),
+    )
+    .orderBy(desc(consentRecords.connectedAt))
+    .limit(1);
+
+  let signalSummary: string;
+  if (whoopConsent?.whoopUserId) {
+    const snapshot = await buildWhoopSnapshot(whoopConsent.whoopUserId);
+    if (snapshot.hasAnyData) {
+      const translated = translateWhoopSnapshotToHospitality(snapshot, {
+        cycleComfortMode,
+      });
+      signalSummary = translated.summary;
+    } else {
+      // Connected but the backfill hasn't returned anything yet — be honest
+      // with the prompt so it doesn't invent context.
+      signalSummary =
+        "whoop is connected but no synced data is available yet; default to balanced pacing.";
+    }
+  } else {
+    // Pre-Whoop fallback: legacy rw_signals payloads.
+    const guestSignals = await db
+      .select()
+      .from(signals)
+      .where(eq(signals.guestId, stay.guestId))
+      .orderBy(asc(signals.capturedAt))
+      .limit(5);
+    signalSummary =
+      guestSignals
+        .map((s) =>
+          translateSignalsToHospitality(s.payload as Record<string, unknown>),
+        )
+        .join(" ") || "no notable signals; default to balanced pacing.";
+  }
 
   const memoryRows = await db
     .select()
@@ -383,7 +428,7 @@ async function runScene4ArrivalBrief(stayId: number): Promise<void> {
       senseOfPlace: property.senseOfPlace as Record<string, unknown>,
     },
     intake: (intake?.answers as never) ?? (await interpretIntake("")),
-    signalSummary: signalSummary || "no notable signals; default to balanced pacing.",
+    signalSummary,
     memoryFacts: memoryRows.map((r) => ({ fact: r.fact, kind: r.kind })),
   });
 
