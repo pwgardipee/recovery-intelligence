@@ -95,10 +95,10 @@ export async function POST(req: NextRequest) {
     .map((line) => {
       const m = line.match(/^([A-Za-z]+):\s*(.+)$/);
       if (!m) return null;
-      const who = m[1].toLowerCase().includes("rose") ? "rose" : "maya";
+      const who = m[1].toLowerCase().includes("rose") ? "rose" : "guest";
       return { who, line: m[2].trim() };
     })
-    .filter((x): x is { who: "rose" | "maya"; line: string } => Boolean(x));
+    .filter((x): x is { who: "rose" | "guest"; line: string } => Boolean(x));
 
   await appendMessage(body.stayId, "staff", {
     author: "rose",

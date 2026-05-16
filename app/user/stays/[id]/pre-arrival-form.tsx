@@ -478,7 +478,7 @@ export function PreArrivalForm({
             <input
               value={companion}
               onChange={(e) => setCompanion(e.target.value)}
-              placeholder="e.g., Alex (partner) — joining Saturday for our anniversary"
+              placeholder="e.g., Peyton (partner) — joining Saturday for our anniversary"
               className="w-full border-b border-line bg-transparent py-2 text-[16px] leading-7 text-forest placeholder:text-ink-muted focus:border-gold focus:outline-none"
             />
             <p className="mt-2 text-[11.5px] italic text-ink-muted">
@@ -743,9 +743,9 @@ const defaultFill: FillPayload = {
   experiences: ["Asaya spa / recovery", "Garden walk / hike", "Wine tasting"],
   scent: "lavender, like the Hotel de Crillon room",
   contactPreference: "sms",
-  companion: "Alex (partner) — joining Saturday for our anniversary",
+  companion: "Peyton (partner) — joining Saturday for our anniversary",
   anythingElse:
-    "Board dinner Friday — please nothing intense before then. Move the wine tasting to Saturday so Alex can join.",
+    "Board dinner Friday — please nothing intense before then. Move the wine tasting to Saturday so Peyton can join.",
 };
 
 function wait(ms: number): Promise<void> {

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 /**
  * Spawn a brand-new demo guest from the control panel. Used for live audience
  * demos where the presenter wants to show the flow against a fresh name
- * (e.g. someone in the room volunteering) rather than the seeded Maya.
+ * (e.g. someone in the room volunteering) rather than the seeded Tavishi.
  */
 export function NewGuestButton() {
   const router = useRouter();

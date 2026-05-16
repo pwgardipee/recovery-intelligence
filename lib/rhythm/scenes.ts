@@ -179,20 +179,20 @@ I sleep cooler than most, but please flag cycle-aware comfort if that's
 an option — would mean a slightly warmer room and gentler pacing the
 first two days.
 
-Alex (my partner) is joining me Saturday — it's our anniversary, so
+Peyton (my partner) is joining me Saturday — it's our anniversary, so
 something quiet and thoughtful for Saturday evening would mean a lot.
 Nothing announced or public.
 
 Experiences I'd love during the stay: Asaya recovery (Friday afternoon
 would be ideal), a long garden / oak grove walk, and the wine tasting if
-you can move it to Saturday so Alex can join. Please don't schedule
+you can move it to Saturday so Peyton can join. Please don't schedule
 anything intense before the Friday dinner.
 
 Mornings can be late on Friday — anything after 9 is great. Texts > calls,
 please. And the lavender scent in the room last time at Crillon was
 lovely — anything like that.
 
-Maya
+Tavishi
 `.trim();
 
   const intake = await interpretIntake(transcript);
@@ -336,14 +336,14 @@ async function runScene3PreArrivalCall(stayId: number): Promise<void> {
       audioUrl: "/audio/pre-arrival.mp3",
       duration: "1:14",
       transcript: [
-        { who: "rose", line: "Hi Maya — this is Rose, calling on behalf of Rosewood Sand Hill ahead of tomorrow. A quick minute?" },
-        { who: "maya", line: "Yeah, of course." },
+        { who: "rose", line: "Hi Tavishi — this is Rose, calling on behalf of Rosewood Sand Hill ahead of tomorrow. A quick minute?" },
+        { who: "tavishi", line: "Yeah, of course." },
         { who: "rose", line: "Lovely. I see the red-eye in at 7:42. Would you like a slower evening tomorrow, or stay open?" },
-        { who: "maya", line: "Slow. Really slow. I just want to feel human before Friday." },
+        { who: "tavishi", line: "Slow. Really slow. I just want to feel human before Friday." },
         { who: "rose", line: "Held. We'll keep check-in concise and put a light dinner option in your room. Any change on the wine tasting?" },
-        { who: "maya", line: "Move it to Saturday if you can." },
+        { who: "tavishi", line: "Move it to Saturday if you can." },
         { who: "rose", line: "Done. One last thing — any scent that has worked before?" },
-        { who: "maya", line: "Lavender. Whatever the Crillon room had." },
+        { who: "tavishi", line: "Lavender. Whatever the Crillon room had." },
         { who: "rose", line: "We have it. We'll have it waiting. Travel safe." },
       ],
       summary: "Confirmed slow Thursday, wine tasting moved to Saturday, lavender scent matched to her Crillon stay.",
@@ -518,7 +518,7 @@ async function runScene5DailyRhythm(stayId: number): Promise<void> {
     author: "rose",
     authorRole: "ai",
     kind: "text",
-    content: { line: "Drafted today's note for Maya. Approve to send." },
+    content: { line: `Drafted today's note for ${guest.name.split(" ")[0]}. Approve to send.` },
   });
 }
 
@@ -579,24 +579,24 @@ async function runScene8PostStayMemory(stayId: number): Promise<void> {
   const { stay, guest, property } = await fullContext(stayId);
 
   const transcript = `
-Rose: Hi Maya — this is Rose, just a quick check-in after your stay at
+Rose: Hi Tavishi — this is Rose, just a quick check-in after your stay at
 Rosewood Sand Hill. Two short questions, no pressure.
 
-Maya: Sure, go ahead.
+Tavishi: Sure, go ahead.
 
 Rose: First — did the pacing feel right?
 
-Maya: Honestly, yes. The slower Thursday made the rest of the trip work.
+Tavishi: Honestly, yes. The slower Thursday made the rest of the trip work.
 I would not have survived Friday otherwise. And the dessert on Saturday
 was a really thoughtful touch.
 
 Rose: I'm glad. Anything we could do differently next time?
 
-Maya: The morning walk loop is gorgeous but the path was a little overgrown
+Tavishi: The morning walk loop is gorgeous but the path was a little overgrown
 near the bend. Otherwise, no — please remember the lavender, the late
 breakfast, all of it.
 
-Rose: We will. Thank you, Maya — safe travels home.
+Rose: We will. Thank you, Tavishi — safe travels home.
 `.trim();
 
   const facts = await extractMemory(transcript, {
@@ -744,7 +744,7 @@ async function runScene9CrossPropertyHandoff(stayId: number): Promise<void> {
     kind: "system_event",
     content: {
       label: "Cross-property handoff",
-      message: `Maya's rhythm preloaded at Rosewood Hong Kong.`,
+      message: `${guest.name.split(" ")[0]}'s rhythm preloaded at Rosewood Hong Kong.`,
       linkLabel: "Open Hong Kong arrival →",
       linkHref: `/admin/stays/${hkStay.id}`,
     },

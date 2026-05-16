@@ -83,9 +83,9 @@ export default async function ControlIndexPage() {
             Fresh demo
           </p>
           <p className="mt-2 text-[12.5px] text-ink-muted">
-            Reseeds Maya at Rosewood Sand Hill and the second-stay
+            Reseeds Tavishi at Rosewood Sand Hill and the second-stay
             handoff at Hong Kong, then drops you straight into the
-            remote for Maya. Safe to run between rehearsals.
+            remote for Tavishi. Safe to run between rehearsals.
           </p>
           <div className="mt-5">
             <BeginDemoButton />

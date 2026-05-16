@@ -164,6 +164,120 @@ function totalSleepMinutesFrom(row: {
   return null;
 }
 
+/**
+ * Aggregate Whoop signal across a date range. Used by the post-stay
+ * "trip wrap" to compare the stay window against the equivalent number
+ * of days BEFORE the stay — surfacing changes like "+53 min sleep per
+ * night" in hospitality language.
+ *
+ * Numbers stay raw here. They are translated via `describeTripDeltas`
+ * inside lib/ai/checkins.ts before reaching any prompt or renderer.
+ */
+export interface TripStatsResult {
+  avgSleepMinutes: number | null;
+  avgRecoveryScore: number | null;
+  workoutCount: number;
+  workoutSports: string[];
+  avgStrain: number | null;
+  daysWithData: number;
+}
+
+export async function buildTripStats(
+  whoopUserId: number,
+  range: { start: Date; end: Date },
+): Promise<TripStatsResult> {
+  const sleeps = await db
+    .select()
+    .from(whoopSleeps)
+    .where(
+      and(
+        eq(whoopSleeps.whoopUserId, whoopUserId),
+        eq(whoopSleeps.nap, false),
+        gte(whoopSleeps.end, range.start),
+        lte(whoopSleeps.end, range.end),
+      ),
+    );
+
+  const sleepMinutes = sleeps
+    .map(totalSleepMinutesFrom)
+    .filter((m): m is number => m !== null);
+  const avgSleepMinutes =
+    sleepMinutes.length > 0
+      ? Math.round(
+          sleepMinutes.reduce((a, b) => a + b, 0) / sleepMinutes.length,
+        )
+      : null;
+
+  const recoveries = await db
+    .select()
+    .from(whoopRecoveries)
+    .where(eq(whoopRecoveries.whoopUserId, whoopUserId));
+  // Recovery isn't time-stamped directly — join via cycleId.
+  const cyclesInRange = await db
+    .select()
+    .from(whoopCycles)
+    .where(
+      and(
+        eq(whoopCycles.whoopUserId, whoopUserId),
+        gte(whoopCycles.start, range.start),
+        lte(whoopCycles.start, range.end),
+      ),
+    );
+  const cycleIdsInRange = new Set(cyclesInRange.map((c) => c.id));
+  const recoveryScores = recoveries
+    .filter((r) => cycleIdsInRange.has(r.cycleId))
+    .map((r) => r.recoveryScore)
+    .filter((n): n is number => n !== null);
+  const avgRecoveryScore =
+    recoveryScores.length > 0
+      ? Math.round(
+          recoveryScores.reduce((a, b) => a + b, 0) / recoveryScores.length,
+        )
+      : null;
+
+  const cycleStrains = cyclesInRange
+    .map((c) => c.strain)
+    .filter((n): n is number => n !== null);
+  const avgStrain =
+    cycleStrains.length > 0
+      ? Number(
+          (
+            cycleStrains.reduce((a, b) => a + b, 0) / cycleStrains.length
+          ).toFixed(1),
+        )
+      : null;
+
+  const workouts = await db
+    .select()
+    .from(whoopWorkouts)
+    .where(
+      and(
+        eq(whoopWorkouts.whoopUserId, whoopUserId),
+        gte(whoopWorkouts.end, range.start),
+        lte(whoopWorkouts.end, range.end),
+      ),
+    );
+
+  const workoutSports = Array.from(
+    new Set(workouts.map((w) => w.sportName).filter(Boolean)),
+  ) as string[];
+
+  const daysWithData = new Set([
+    ...sleeps.map((s) => s.end.toDateString()),
+    ...cyclesInRange.map((c) => c.start.toDateString()),
+    ...workouts.map((w) => w.end.toDateString()),
+  ]).size;
+
+  return {
+    avgSleepMinutes,
+    avgRecoveryScore,
+    workoutCount: workouts.length,
+    workoutSports,
+    avgStrain,
+    daysWithData,
+  };
+}
+
 export async function buildWhoopSnapshot(
   whoopUserId: number,
   asOfInput?: Date,

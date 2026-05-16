@@ -18,9 +18,9 @@ export const dynamic = "force-dynamic";
  * POST /api/seed
  *
  * Idempotent seed of the demo dataset. Creates the two properties
- * (Sand Hill + Hong Kong), the demo guest (Maya), a stay at Sand Hill
- * starting tonight, and a small memory residue from a prior stay so the
- * "we know this guest" beat lands instantly.
+ * (Sand Hill + Hong Kong), the demo guest (Tavishi Gupta), a stay at
+ * Sand Hill starting tonight, and a small memory residue from a prior
+ * stay so the "we know this guest" beat lands instantly.
  *
  * Safe to call multiple times — re-running wipes per-stay state but keeps
  * the same primary keys.
@@ -121,42 +121,56 @@ export async function POST() {
   // ---- Guest -------------------------------------------------------------
 
   // The phone number drives the live ElevenLabs demo call, so we want
-  // re-running the seed to actually refresh it on an existing Maya row
+  // re-running the seed to actually refresh it on an existing Tavishi row
   // (rw_guests.email is not unique, so onConflictDoNothing was effectively
   // a one-shot insert — keeping stale state forever).
-  const mayaSeed = {
-    name: "Maya Chen",
-    email: "maya@maya-ventures.com",
+  const tavishiSeed = {
+    name: "Tavishi Gupta",
+    email: "tavishi@example.com",
     phone: "+12626857807",
     photoUrl: null,
     contactPreference: "sms",
     mergedProfileCount: 3,
   };
 
-  let [maya] = await db
+  // Migrate any pre-existing Maya row to the new identity so we don't
+  // accidentally orphan stays/memory/facts created before the rename.
+  const [existingByOldEmail] = await db
     .select()
     .from(guests)
-    .where(eq(guests.email, mayaSeed.email))
+    .where(eq(guests.email, "maya@maya-ventures.com"))
+    .limit(1);
+  if (existingByOldEmail) {
+    await db
+      .update(guests)
+      .set(tavishiSeed)
+      .where(eq(guests.id, existingByOldEmail.id));
+  }
+
+  let [tavishi] = await db
+    .select()
+    .from(guests)
+    .where(eq(guests.email, tavishiSeed.email))
     .limit(1);
 
-  if (!maya) {
-    const [inserted] = await db.insert(guests).values(mayaSeed).returning();
-    maya = inserted;
+  if (!tavishi) {
+    const [inserted] = await db.insert(guests).values(tavishiSeed).returning();
+    tavishi = inserted;
   } else {
     await db
       .update(guests)
       .set({
-        name: mayaSeed.name,
-        phone: mayaSeed.phone,
-        photoUrl: mayaSeed.photoUrl,
-        contactPreference: mayaSeed.contactPreference,
-        mergedProfileCount: mayaSeed.mergedProfileCount,
+        name: tavishiSeed.name,
+        phone: tavishiSeed.phone,
+        photoUrl: tavishiSeed.photoUrl,
+        contactPreference: tavishiSeed.contactPreference,
+        mergedProfileCount: tavishiSeed.mergedProfileCount,
       })
-      .where(eq(guests.id, maya.id));
-    maya = { ...maya, ...mayaSeed };
+      .where(eq(guests.id, tavishi.id));
+    tavishi = { ...tavishi, ...tavishiSeed };
   }
 
-  if (!maya) {
+  if (!tavishi) {
     return NextResponse.json({ error: "guest insert failed" }, { status: 500 });
   }
 
@@ -165,19 +179,19 @@ export async function POST() {
   const existingMemory = await db
     .select()
     .from(memoryFacts)
-    .where(eq(memoryFacts.guestId, maya.id))
+    .where(eq(memoryFacts.guestId, tavishi.id))
     .limit(1);
 
   if (existingMemory.length === 0) {
     await db.insert(memoryFacts).values([
       {
-        guestId: maya.id,
+        guestId: tavishi.id,
         fact: "Loves the lavender scent from her Hotel de Crillon room (March 2025).",
         kind: "preference",
         confidence: 0.95,
       },
       {
-        guestId: maya.id,
+        guestId: tavishi.id,
         fact: "Travels frequently for board meetings; arrives in fragile state, needs slow first night.",
         kind: "pattern",
         confidence: 0.9,
@@ -196,13 +210,13 @@ export async function POST() {
   let [sandStay] = await db
     .select()
     .from(stays)
-    .where(eq(stays.guestId, maya.id));
+    .where(eq(stays.guestId, tavishi.id));
 
   if (!sandStay) {
     const [inserted] = await db
       .insert(stays)
       .values({
-        guestId: maya.id,
+        guestId: tavishi.id,
         propertyId: sandHill.id,
         checkIn,
         checkOut,
@@ -216,7 +230,7 @@ export async function POST() {
   } else {
     // Wipe demo-generated content but keep the stay row.
     await db.delete(messages).where(eq(messages.stayId, sandStay.id));
-    await db.delete(signals).where(eq(signals.guestId, maya.id));
+    await db.delete(signals).where(eq(signals.guestId, tavishi.id));
     await db
       .update(stays)
       .set({ demoScene: 0, phase: "pre", checkIn, checkOut })
@@ -226,7 +240,7 @@ export async function POST() {
   return NextResponse.json({
     ok: true,
     sandHillStayId: sandStay.id,
-    guest: maya.name,
+    guest: tavishi.name,
     properties: { sandHill: sandHill.id, hongKong: hongKong.id },
     nextSteps: [
       `Open /admin/stays/${sandStay.id} to start the demo`,

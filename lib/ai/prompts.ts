@@ -52,7 +52,7 @@ export interface FlightInfo {
 }
 
 export interface Companion {
-  name: string;          // "Alex"
+  name: string;          // "Peyton"
   relationship: string;  // "partner", "spouse", "colleague", "friend"
   note: string | null;   // "anniversary Saturday"
 }
@@ -653,7 +653,7 @@ function fallbackDaily(input: DailyInput): DailyRhythm {
       { timeLabel: "3:00pm", suggestion: "Asaya recovery treatment", optional: true },
       { timeLabel: "evening", suggestion: "Light tasting menu held in the conservatory", optional: false },
     ],
-    staffNote: `Hold morning until 9:30 — confirmed by Maya last night. Recommend Asaya recovery rather than the trail hike originally booked; she has a board dinner tomorrow. Wine tasting moved to Saturday.`,
+    staffNote: `Hold morning until 9:30 — confirmed by the guest last night. Recommend Asaya recovery rather than the trail hike originally booked; she has a board dinner tomorrow. Wine tasting moved to Saturday.`,
     approvalRequired: true,
   };
 }

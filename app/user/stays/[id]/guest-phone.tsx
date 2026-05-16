@@ -5,7 +5,7 @@ import { GuestThread, type RenderedMessage } from "@/app/admin/stays/[id]/messag
 /**
  * The guest's phone view during/after the stay. Wraps the existing
  * GuestThread component in an iMessage-feeling frame so the demo audience
- * reads it as "Maya's actual phone."
+ * reads it as "the guest's actual phone."
  */
 export function GuestPhone({
   messages,

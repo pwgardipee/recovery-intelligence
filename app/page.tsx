@@ -249,7 +249,7 @@ function EmptyState() {
         <code className="rounded bg-cream px-1.5 py-0.5 text-[12px]">
           curl -X POST http://localhost:3000/api/seed
         </code>{" "}
-        to load Maya at Sand Hill (the demo guest) and the second-stay handoff
+        to load Tavishi at Sand Hill (the demo guest) and the second-stay handoff
         at Rosewood Hong Kong.
       </p>
     </div>

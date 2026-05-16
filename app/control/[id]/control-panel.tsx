@@ -45,6 +45,9 @@ export function ControlPanel({
     hasIntake: boolean;
     hasCall: boolean;
     hasBrief: boolean;
+    hasMorningCheckin: boolean;
+    hasEveningCheckin: boolean;
+    hasPostStay: boolean;
   };
   whoop: {
     connected: boolean;
@@ -134,6 +137,41 @@ export function ControlPanel({
       setRefreshError(err instanceof Error ? err.message : "Refresh failed");
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  // ---- On-trip / post-trip check-ins -----------------------------------
+  // One handler drives all three buttons: kind decides whether the API
+  // runs runCheckin("morning"|"evening") or runPostStayCheckin().
+  const [checkinRunning, setCheckinRunning] = useState<
+    "morning" | "evening" | "post_stay" | null
+  >(null);
+  const [checkinError, setCheckinError] = useState<string | null>(null);
+
+  async function runCheckinCall(kind: "morning" | "evening" | "post_stay") {
+    setCheckinRunning(kind);
+    setCheckinError(null);
+    try {
+      const res = await fetch("/api/calls/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stayId, kind }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        setCheckinError(data.error || `Check-in failed (${res.status})`);
+      } else {
+        router.refresh();
+      }
+    } catch (err) {
+      setCheckinError(
+        err instanceof Error ? err.message : "Check-in failed",
+      );
+    } finally {
+      setCheckinRunning(null);
     }
   }
 
@@ -329,19 +367,164 @@ export function ControlPanel({
         </div>
       </div>
 
-      {/* In-stay + post-stay — keep available via scene controller */}
+      {/* IN-TRIP — Whoop-aware morning + evening check-ins */}
       <div className="mt-12">
         <div className="flex items-baseline justify-between">
           <h2 className="font-display text-[1.75rem] leading-tight text-forest">
-            In-stay & post-stay
+            On-trip
           </h2>
           <span className="text-[10px] uppercase tracking-[0.32em] text-ink-muted">
-            via scene advance
+            two check-ins · in order
           </span>
         </div>
         <p className="font-serif mt-2 text-[14px] italic text-ink-muted">
-          Day-2 rhythm, approval gates, delight moments, post-stay call,
-          cross-property handoff. One click per beat.
+          Rose calls the guest mid-stay using their latest Whoop signal. Each
+          call drops a transcript + voice note into the staff thread, plus a
+          concrete recommendation card the team acts on today.
+        </p>
+
+        <div className="mt-6 space-y-4">
+          {/* Step 5 — Morning check-in */}
+          <DemoStep
+            number={5}
+            title="Morning check-in"
+            description={`Rose calls ${guestName.split(" ")[0]} before breakfast. She references how the night landed (a short rest, a fuller rest, energy steadied), folds in any food preferences, and proposes a concrete morning — breakfast time + location, walk loop, refuel cues if there was a workout.`}
+            status={
+              !steps.hasIntake
+                ? "locked"
+                : steps.hasMorningCheckin
+                  ? "done"
+                  : "available"
+            }
+            lockedNote="Complete the email step first."
+            doneNote="Morning transcript + recommendation in the staff thread"
+            action={
+              <div className="flex flex-col items-start gap-2">
+                <button
+                  onClick={() => runCheckinCall("morning")}
+                  disabled={checkinRunning !== null}
+                  className="group flex items-center gap-2 rounded-sm bg-forest px-5 py-2.5 text-[11px] uppercase tracking-[0.22em] text-cream hover:bg-forest-deep disabled:opacity-50"
+                >
+                  {checkinRunning === "morning"
+                    ? "Calling…"
+                    : steps.hasMorningCheckin
+                      ? "Run again"
+                      : "Run morning check-in"}
+                  <ExternalArrow />
+                </button>
+                {!whoop.connected && (
+                  <p className="text-[10.5px] uppercase tracking-[0.22em] text-amber">
+                    Whoop not connected — call will use intake only
+                  </p>
+                )}
+                {checkinError && checkinRunning === null && (
+                  <p className="text-[10.5px] uppercase tracking-[0.22em] text-amber">
+                    {checkinError}
+                  </p>
+                )}
+              </div>
+            }
+          />
+
+          {/* Step 6 — Evening check-in */}
+          <DemoStep
+            number={6}
+            title="Evening check-in"
+            description="Before turndown, Rose calls again. She closes the day on the day's load — refuel cart if there was a hard effort, soft-pacing tomorrow morning if energy ran low — and confirms tomorrow's first beat with the guest."
+            status={
+              !steps.hasMorningCheckin
+                ? "locked"
+                : steps.hasEveningCheckin
+                  ? "done"
+                  : "available"
+            }
+            lockedNote="Run the morning check-in first."
+            doneNote="Evening transcript + tomorrow-morning rhythm in the staff thread"
+            action={
+              <div className="flex flex-col items-start gap-2">
+                <button
+                  onClick={() => runCheckinCall("evening")}
+                  disabled={checkinRunning !== null}
+                  className="group flex items-center gap-2 rounded-sm bg-forest px-5 py-2.5 text-[11px] uppercase tracking-[0.22em] text-cream hover:bg-forest-deep disabled:opacity-50"
+                >
+                  {checkinRunning === "evening"
+                    ? "Calling…"
+                    : steps.hasEveningCheckin
+                      ? "Run again"
+                      : "Run evening check-in"}
+                  <ExternalArrow />
+                </button>
+              </div>
+            }
+          />
+        </div>
+      </div>
+
+      {/* POST-TRIP — wrap call + memory consolidation */}
+      <div className="mt-12">
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-display text-[1.75rem] leading-tight text-forest">
+            Post-trip
+          </h2>
+          <span className="text-[10px] uppercase tracking-[0.32em] text-ink-muted">
+            one call · 24h after checkout
+          </span>
+        </div>
+        <p className="font-serif mt-2 text-[14px] italic text-ink-muted">
+          Rose calls the guest a day after checkout, surfaces ONE specific
+          restoration moment (e.g. "you slept ~53 min more per night here"),
+          and consolidates durable facts into memory so the next Rosewood
+          property starts from somewhere real.
+        </p>
+
+        <div className="mt-6 space-y-4">
+          {/* Step 7 — Post-stay follow-up */}
+          <DemoStep
+            number={7}
+            title="Post-stay follow-up"
+            description={`A short, warm call 24 hours after checkout. Rose surfaces ONE restoration insight from the trip vs the week before, asks one reflective question, and writes 4–7 facts into ${guestName.split(" ")[0]}'s cross-property profile so the next stay starts from memory.`}
+            status={
+              !steps.hasEveningCheckin
+                ? "locked"
+                : steps.hasPostStay
+                  ? "done"
+                  : "available"
+            }
+            lockedNote="Run the evening check-in first."
+            doneNote="Trip wrap card + memory facts in the staff thread"
+            action={
+              <div className="flex flex-col items-start gap-2">
+                <button
+                  onClick={() => runCheckinCall("post_stay")}
+                  disabled={checkinRunning !== null}
+                  className="group flex items-center gap-2 rounded-sm bg-forest px-5 py-2.5 text-[11px] uppercase tracking-[0.22em] text-cream hover:bg-forest-deep disabled:opacity-50"
+                >
+                  {checkinRunning === "post_stay"
+                    ? "Calling…"
+                    : steps.hasPostStay
+                      ? "Run again"
+                      : "Run post-stay follow-up"}
+                  <ExternalArrow />
+                </button>
+              </div>
+            }
+          />
+        </div>
+      </div>
+
+      {/* Scene controller — kept for rehearsal jumping */}
+      <div className="mt-12">
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-display text-[1.75rem] leading-tight text-forest">
+            Scripted scenes
+          </h2>
+          <span className="text-[10px] uppercase tracking-[0.32em] text-ink-muted">
+            rehearsal only
+          </span>
+        </div>
+        <p className="font-serif mt-2 text-[14px] italic text-ink-muted">
+          Original 10-beat scripted demo — useful for rehearsal jumps and
+          delight-moment / cross-property handoff beats not exposed above.
         </p>
 
         <div className="rw-card mt-6 overflow-hidden">

@@ -27,7 +27,7 @@ interface Props {
 }
 
 interface TranscriptEntry {
-  who: "rose" | "maya";
+  who: "rose" | "guest";
   line: string;
   at: number;
 }
@@ -77,7 +77,7 @@ function RoseCallButtonInner({
       const m = msg as { source?: string; message?: string; text?: string };
       const line = m.message ?? m.text ?? "";
       if (!line) return;
-      const who: "rose" | "maya" = m.source === "user" ? "maya" : "rose";
+      const who: "rose" | "guest" = m.source === "user" ? "guest" : "rose";
       setTranscript((prev) => [...prev, { who, line, at: Date.now() }]);
     },
   });

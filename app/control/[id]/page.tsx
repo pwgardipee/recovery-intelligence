@@ -61,13 +61,32 @@ export default async function ControlPage({
     .where(eq(intakeAnswers.stayId, stayId))
     .limit(1);
 
-  const [callRow] = await db
-    .select({ id: messages.id })
+  const allCalls = await db
+    .select({
+      id: messages.id,
+      content: messages.content,
+      createdAt: messages.createdAt,
+    })
     .from(messages)
     .where(
       and(eq(messages.stayId, stayId), eq(messages.kind, "voice_call")),
     )
-    .limit(1);
+    .orderBy(desc(messages.createdAt));
+
+  const callRow = allCalls[0];
+  const labelOf = (row: { content: unknown }) => {
+    const c = row.content as Record<string, unknown> | null;
+    return typeof c?.label === "string" ? c.label : "";
+  };
+  const hasMorningCheckin = allCalls.some((c) =>
+    labelOf(c).toLowerCase().includes("morning check-in"),
+  );
+  const hasEveningCheckin = allCalls.some((c) =>
+    labelOf(c).toLowerCase().includes("evening check-in"),
+  );
+  const hasPostStay = allCalls.some((c) =>
+    labelOf(c).toLowerCase().includes("post-stay"),
+  );
 
   const [briefRow] = await db
     .select({ id: messages.id })
@@ -82,6 +101,9 @@ export default async function ControlPage({
     hasIntake: Boolean(intakeRow),
     hasCall: Boolean(callRow),
     hasBrief: Boolean(briefRow),
+    hasMorningCheckin,
+    hasEveningCheckin,
+    hasPostStay,
   };
 
   // Whoop link state for the "Refresh Whoop signal" step.

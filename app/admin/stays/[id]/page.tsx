@@ -112,6 +112,26 @@ export default async function AdminStayPage({
     }))
     .sort((a, b) => b.at.getTime() - a.at.getTime());
 
+  // Latest daily rhythm — surfaces whatever Rose proposed for today
+  // (morning + evening check-ins both write daily_rhythm cards).
+  const latestDailyRhythm = [...staffMessages]
+    .reverse()
+    .find((m) => m.kind === "daily_rhythm");
+  const dailyRhythmContent = latestDailyRhythm?.content as
+    | DailyRhythmShape
+    | undefined;
+  const dailyRhythmAt = latestDailyRhythm?.createdAt ?? null;
+
+  // Latest trip wrap — surfaces the post-stay restoration insight
+  // (e.g. "you slept ~53 min more per night this trip").
+  const latestTripWrap = [...staffMessages]
+    .reverse()
+    .find((m) => m.kind === "trip_wrap");
+  const tripWrapContent = latestTripWrap?.content as
+    | TripWrapShape
+    | undefined;
+  const tripWrapAt = latestTripWrap?.createdAt ?? null;
+
   // Whoop snapshot. Resolve the user via either the consent record (preferred)
   // or — when the consent row predates the whoop_user_id column or never had
   // a per-stay cookie — fall back to the most-recent unrevoked connection
@@ -217,6 +237,10 @@ export default async function AdminStayPage({
             }))}
             whoop={whoopHospitality}
             whoopSnapshot={whoopSnapshot}
+            dailyRhythm={dailyRhythmContent ?? null}
+            dailyRhythmAt={dailyRhythmAt ? dailyRhythmAt.toISOString() : null}
+            tripWrap={tripWrapContent ?? null}
+            tripWrapAt={tripWrapAt ? tripWrapAt.toISOString() : null}
           />
         )}
 
@@ -263,6 +287,10 @@ function OverviewTab({
   voiceCalls,
   whoop,
   whoopSnapshot,
+  dailyRhythm,
+  dailyRhythmAt,
+  tripWrap,
+  tripWrapAt,
 }: {
   stay: typeof stays.$inferSelect;
   guest: typeof guests.$inferSelect;
@@ -278,6 +306,10 @@ function OverviewTab({
   voiceCalls: { id: number; at: string; content: VoiceCallContent }[];
   whoop: ReturnType<typeof translateWhoopSnapshotToHospitality> | null;
   whoopSnapshot: WhoopSnapshot | null;
+  dailyRhythm: DailyRhythmShape | null;
+  dailyRhythmAt: string | null;
+  tripWrap: TripWrapShape | null;
+  tripWrapAt: string | null;
 }) {
   return (
     <div className="space-y-8">
@@ -458,6 +490,31 @@ function OverviewTab({
           </div>
         </Section>
       </div>
+
+      {/* Trip wrap — only shows once the post-stay call has run. Leads
+          with the SINGLE celebratory restoration insight (e.g. "+53 min
+          per night") so it's the first thing staff see. */}
+      {tripWrap && (
+        <Section title="Trip wrap">
+          <TripWrapPanel
+            tripWrap={tripWrap}
+            tripWrapAt={tripWrapAt}
+          />
+        </Section>
+      )}
+
+      {/* Today's rhythm — populated by morning/evening check-ins. Surfaces
+          ONE concrete recommendation + 3-5 staff actions in front of the
+          call cards so the operator sees the proposal before the
+          transcript. */}
+      {dailyRhythm?.rhythm && (
+        <Section title="Today's rhythm">
+          <DailyRhythmPanel
+            rhythm={dailyRhythm}
+            rhythmAt={dailyRhythmAt}
+          />
+        </Section>
+      )}
 
       {/* From the calls — surfaces what Rose actually heard from the guest */}
       <Section title={`From the calls (${voiceCalls.length})`}>
@@ -957,6 +1014,204 @@ function ConsentChip({
   );
 }
 
+function TripWrapPanel({
+  tripWrap,
+  tripWrapAt,
+}: {
+  tripWrap: TripWrapShape;
+  tripWrapAt: string | null;
+}) {
+  const sleepDelta =
+    typeof tripWrap.duringTrip?.avgSleepMinutes === "number" &&
+    typeof tripWrap.beforeTrip?.avgSleepMinutes === "number"
+      ? Math.round(
+          tripWrap.duringTrip.avgSleepMinutes -
+            tripWrap.beforeTrip.avgSleepMinutes,
+        )
+      : null;
+  const recoveryDelta =
+    typeof tripWrap.duringTrip?.avgRecoveryScore === "number" &&
+    typeof tripWrap.beforeTrip?.avgRecoveryScore === "number"
+      ? Math.round(
+          tripWrap.duringTrip.avgRecoveryScore -
+            tripWrap.beforeTrip.avgRecoveryScore,
+        )
+      : null;
+
+  return (
+    <div className="overflow-hidden rounded-sm border border-line bg-paper">
+      <div className="border-b border-line bg-gradient-to-r from-forest to-forest-deep px-5 py-5 text-cream">
+        <p className="text-[10px] uppercase tracking-[0.22em] text-gold-soft">
+          Trip wrap · what we told the guest
+        </p>
+        <p className="font-serif mt-2 text-[20px] leading-snug text-paper">
+          {tripWrap.headline ?? "Stay summary"}
+        </p>
+        {tripWrapAt && (
+          <p className="mt-1.5 text-[10.5px] uppercase tracking-[0.18em] text-cream/60">
+            {formatStamp(new Date(tripWrapAt))}
+          </p>
+        )}
+      </div>
+      <div className="space-y-4 px-5 py-4">
+        {tripWrap.lines && tripWrap.lines.length > 0 && (
+          <ul className="space-y-2">
+            {tripWrap.lines.map((line) => (
+              <li
+                key={line}
+                className="flex gap-2 text-[13px] leading-6 text-ink"
+              >
+                <span className="mt-2 inline-block h-1 w-1 shrink-0 rounded-full bg-gold" />
+                {line}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {(sleepDelta !== null ||
+          recoveryDelta !== null ||
+          (typeof tripWrap.duringTrip?.workoutCount === "number" &&
+            tripWrap.duringTrip.workoutCount > 0)) && (
+          <div className="grid grid-cols-1 gap-3 border-t border-line pt-4 sm:grid-cols-3">
+            {sleepDelta !== null && (
+              <OverviewDeltaTile
+                label="Sleep · per night vs week before"
+                value={`${sleepDelta >= 0 ? "+" : ""}${sleepDelta} min`}
+                positive={sleepDelta >= 15}
+                negative={sleepDelta <= -15}
+              />
+            )}
+            {recoveryDelta !== null && (
+              <OverviewDeltaTile
+                label="Energy · trend"
+                value={
+                  recoveryDelta >= 8
+                    ? "climbed"
+                    : recoveryDelta <= -8
+                      ? "softened"
+                      : "steady"
+                }
+                positive={recoveryDelta >= 8}
+                negative={recoveryDelta <= -8}
+              />
+            )}
+            {typeof tripWrap.duringTrip?.workoutCount === "number" &&
+              tripWrap.duringTrip.workoutCount > 0 && (
+                <OverviewDeltaTile
+                  label="Workouts · on-property"
+                  value={`${tripWrap.duringTrip.workoutCount}${
+                    tripWrap.duringTrip.workoutSports?.length
+                      ? ` · ${tripWrap.duringTrip.workoutSports.slice(0, 2).join(", ")}`
+                      : ""
+                  }`}
+                  positive={false}
+                  negative={false}
+                />
+              )}
+          </div>
+        )}
+
+        {tripWrap.guestLine && (
+          <div className="rounded-sm border border-line-soft bg-cream/50 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
+              Soft text · drafted for the guest
+            </p>
+            <p className="font-serif mt-1.5 text-[13.5px] italic text-ink-soft">
+              {tripWrap.guestLine}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OverviewDeltaTile({
+  label,
+  value,
+  positive,
+  negative,
+}: {
+  label: string;
+  value: string;
+  positive: boolean;
+  negative: boolean;
+}) {
+  return (
+    <div className="rounded-sm border border-line bg-paper px-3 py-2.5">
+      <p className="text-[9.5px] uppercase tracking-[0.2em] text-ink-muted">
+        {label}
+      </p>
+      <p
+        className={`font-serif mt-1 text-[15px] ${
+          positive ? "text-emerald" : negative ? "text-clay" : "text-forest"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function DailyRhythmPanel({
+  rhythm,
+  rhythmAt,
+}: {
+  rhythm: DailyRhythmShape;
+  rhythmAt: string | null;
+}) {
+  const r = rhythm.rhythm;
+  if (!r) return null;
+  return (
+    <div className="overflow-hidden rounded-sm border border-line bg-paper">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line-soft bg-cream/30 px-4 py-3">
+        <p className="text-[10px] uppercase tracking-[0.22em] text-gold">
+          {rhythm.dayLabel ?? "Today's rhythm"}
+        </p>
+        {rhythmAt && (
+          <span className="text-[10.5px] uppercase tracking-[0.18em] text-ink-muted">
+            {formatStamp(new Date(rhythmAt))}
+          </span>
+        )}
+      </div>
+      <div className="space-y-4 px-4 py-4">
+        {r.staffNote && (
+          <p className="font-serif text-[14px] leading-relaxed text-ink-soft">
+            {r.staffNote}
+          </p>
+        )}
+
+        {r.schedule && r.schedule.length > 0 && (
+          <ul className="space-y-2 border-t border-line-soft pt-3">
+            {r.schedule.map((item, i) => (
+              <li
+                key={`${item.timeLabel ?? i}-${i}`}
+                className="flex gap-3 text-[13px] leading-6 text-ink"
+              >
+                <span className="mt-0.5 w-24 shrink-0 text-[10.5px] uppercase tracking-[0.18em] text-ink-muted">
+                  {item.timeLabel ?? "—"}
+                </span>
+                <span className="flex-1">{item.suggestion}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {r.morningLine && (
+          <div className="rounded-sm border border-line-soft bg-ivory/60 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
+              Soft text · drafted for the guest
+            </p>
+            <p className="font-serif mt-1.5 text-[13.5px] italic text-ink-soft">
+              {r.morningLine}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function VoiceCallCard({
   at,
   content,
@@ -1052,6 +1307,39 @@ interface VoiceCallContent {
   label?: string;
   summary?: string;
   transcript?: Array<{ who: string; line: string }>;
+}
+
+interface DailyRhythmShape {
+  rhythm?: {
+    morningLine?: string;
+    morningSubject?: "softer" | "balanced" | "fuller";
+    schedule?: Array<{
+      timeLabel?: string;
+      suggestion?: string;
+      optional?: boolean;
+    }>;
+    staffNote?: string;
+  };
+  guestLine?: string;
+  dayLabel?: string;
+}
+
+interface TripWrapShape {
+  headline?: string;
+  lines?: string[];
+  duringTrip?: {
+    avgSleepMinutes?: number | null;
+    avgRecoveryScore?: number | null;
+    workoutCount?: number;
+    workoutSports?: string[];
+  };
+  beforeTrip?: {
+    avgSleepMinutes?: number | null;
+    avgRecoveryScore?: number | null;
+    workoutCount?: number;
+    workoutSports?: string[];
+  };
+  guestLine?: string;
 }
 
 interface IntakeShape {

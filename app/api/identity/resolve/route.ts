@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     confidence: f.confidence,
   }));
 
-  // Curated list of past properties for the merge card. For Maya specifically
+  // Curated list of past properties for the merge card. For Tavishi specifically
   // we know the prior stays; for any other guest we list whatever facts hint at.
   const priorProperties = inferPriorProperties(
     guest.mergedProfileCount,
@@ -138,7 +138,7 @@ function inferPriorProperties(count: number, facts: string[]): string[] {
     const s = inferSource(f);
     if (s && s !== "Rosewood global") found.add(s);
   }
-  // For Maya's specific demo: ensure these show up even if the seeded facts
+  // For Tavishi's specific demo: ensure these show up even if the seeded facts
   // don't mention every property.
   const defaults = ["Hotel de Crillon, Paris", "Rosewood Miramar Beach"];
   for (const d of defaults) {

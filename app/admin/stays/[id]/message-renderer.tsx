@@ -143,6 +143,9 @@ function MessageBody({ message }: { message: RenderedMessage }) {
     case "memory_write":
       return <MemoryWrite content={c as never} />;
 
+    case "trip_wrap":
+      return <TripWrap content={c as never} />;
+
     case "preloaded_memory":
       return <PreloadedMemory content={c as never} />;
 
@@ -876,6 +879,156 @@ function PreloadedMemory({
   );
 }
 
+function TripWrap({
+  content,
+}: {
+  content: {
+    headline: string;
+    lines: string[];
+    duringTrip?: {
+      avgSleepMinutes?: number | null;
+      avgRecoveryScore?: number | null;
+      workoutCount?: number;
+      workoutSports?: string[];
+    };
+    beforeTrip?: {
+      avgSleepMinutes?: number | null;
+      avgRecoveryScore?: number | null;
+      workoutCount?: number;
+      workoutSports?: string[];
+    };
+    guestLine?: string;
+  };
+}) {
+  const sleepDelta =
+    typeof content.duringTrip?.avgSleepMinutes === "number" &&
+    typeof content.beforeTrip?.avgSleepMinutes === "number"
+      ? Math.round(
+          content.duringTrip.avgSleepMinutes - content.beforeTrip.avgSleepMinutes,
+        )
+      : null;
+  const recoveryDelta =
+    typeof content.duringTrip?.avgRecoveryScore === "number" &&
+    typeof content.beforeTrip?.avgRecoveryScore === "number"
+      ? Math.round(
+          content.duringTrip.avgRecoveryScore -
+            content.beforeTrip.avgRecoveryScore,
+        )
+      : null;
+
+  return (
+    <div className="rw-card overflow-hidden">
+      <div className="border-b border-line bg-gradient-to-r from-forest to-forest-deep px-5 py-4 text-cream">
+        <p className="text-[10px] uppercase tracking-[0.22em] text-gold-soft">
+          Trip wrap · for {content.guestLine ? "the guest" : "internal review"}
+        </p>
+        <p className="font-serif mt-2 text-[18px] leading-snug text-paper">
+          {content.headline}
+        </p>
+      </div>
+      <div className="space-y-4 px-5 py-4">
+        {content.lines.length > 0 && (
+          <ul className="space-y-2">
+            {content.lines.map((line) => (
+              <li
+                key={line}
+                className="flex gap-2 text-[13px] leading-6 text-ink"
+              >
+                <span className="mt-2 inline-block h-1 w-1 shrink-0 rounded-full bg-gold" />
+                {line}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {(sleepDelta !== null || recoveryDelta !== null) && (
+          <div className="grid grid-cols-1 gap-3 border-t border-line pt-4 sm:grid-cols-3">
+            {sleepDelta !== null && (
+              <DeltaTile
+                label="Sleep · per night"
+                value={`${sleepDelta >= 0 ? "+" : ""}${sleepDelta} min`}
+                positive={sleepDelta >= 15}
+                negative={sleepDelta <= -15}
+              />
+            )}
+            {recoveryDelta !== null && (
+              <DeltaTile
+                label="Energy · trend"
+                value={
+                  recoveryDelta >= 8
+                    ? "climbed"
+                    : recoveryDelta <= -8
+                      ? "softened"
+                      : "steady"
+                }
+                positive={recoveryDelta >= 8}
+                negative={recoveryDelta <= -8}
+              />
+            )}
+            {typeof content.duringTrip?.workoutCount === "number" &&
+              content.duringTrip.workoutCount > 0 && (
+                <DeltaTile
+                  label="Workouts · on-property"
+                  value={`${content.duringTrip.workoutCount}${
+                    content.duringTrip.workoutSports?.length
+                      ? ` · ${content.duringTrip.workoutSports
+                          .slice(0, 2)
+                          .join(", ")}`
+                      : ""
+                  }`}
+                  positive={false}
+                  negative={false}
+                />
+              )}
+          </div>
+        )}
+
+        {content.guestLine && (
+          <div className="rounded-sm border border-line-soft bg-cream/40 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
+              Soft text · drafted for the guest
+            </p>
+            <p className="font-serif mt-1.5 text-[13.5px] italic text-ink-soft">
+              {content.guestLine}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DeltaTile({
+  label,
+  value,
+  positive,
+  negative,
+}: {
+  label: string;
+  value: string;
+  positive: boolean;
+  negative: boolean;
+}) {
+  return (
+    <div className="rounded-sm border border-line bg-paper px-3 py-2.5">
+      <p className="text-[9.5px] uppercase tracking-[0.2em] text-ink-muted">
+        {label}
+      </p>
+      <p
+        className={`font-serif mt-1 text-[15px] ${
+          positive
+            ? "text-emerald"
+            : negative
+              ? "text-clay"
+              : "text-forest"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function SystemEvent({
   content,
 }: {
@@ -1095,7 +1248,9 @@ function authorDisplay(author: string) {
     anya_concierge: "Anya · Concierge",
     philip_front: "Philip · Front Desk",
     eun_spa: "Eun · Asaya",
-    maya: "Maya",
+    maya: "Tavishi",
+    tavishi: "Tavishi",
+    guest: "Guest",
   };
   return map[author] ?? author;
 }

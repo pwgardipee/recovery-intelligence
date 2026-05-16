@@ -176,7 +176,7 @@ export const messages = pgTable(
       .references(() => stays.id, { onDelete: "cascade" }),
     // "staff" | "guest"
     thread: text("thread").notNull(),
-    // "rhythm" | "maya" | "front_desk" | "concierge" | "housekeeping" | "spa"
+    // "rhythm" | "guest" | "front_desk" | "concierge" | "housekeeping" | "spa"
     author: text("author").notNull(),
     // "ai" | "staff" | "guest"
     authorRole: text("author_role").notNull(),
