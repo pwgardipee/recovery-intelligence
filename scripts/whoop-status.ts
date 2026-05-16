@@ -1,6 +1,7 @@
 import "./_env";
 
 import { desc, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { db } from "../lib/db";
 import {
@@ -37,7 +38,7 @@ async function main() {
   console.log(`\n=== whoop_body_measurements (${body.length}) ===`);
   for (const b of body) console.log(`  ${b.whoopUserId}`, b);
 
-  const counts = async (label: string, table: typeof whoopCycles) => {
+  const counts = async (label: string, table: PgTable) => {
     const [{ n }] = await db
       .select({ n: sql<number>`count(*)::int` })
       .from(table);
