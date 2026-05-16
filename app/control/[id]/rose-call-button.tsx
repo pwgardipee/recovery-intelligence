@@ -52,6 +52,7 @@ function RoseCallButtonInner({
 }: Props) {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [savePending, startSave] = useTransition();
   const startTimeRef = useRef(0);
 
@@ -64,6 +65,13 @@ function RoseCallButtonInner({
     },
     onError: (err: unknown) => {
       console.error("[rose-call]", err);
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+            ? err
+            : "Conversation error — see console for details.";
+      setError(msg);
     },
     onMessage: (msg: unknown) => {
       const m = msg as { source?: string; message?: string; text?: string };
@@ -83,18 +91,39 @@ function RoseCallButtonInner({
     if (!agentId) return;
     setTranscript([]);
     setDone(false);
+    setError(null);
     try {
       // Fetch the dynamic variables for this stay so Rose walks in already
       // knowing her name, flight, occasion, companion, past preferences, etc.
-      const res = await fetch(`/api/elevenlabs/context/${stayId}`);
-      const data = (await res.json()) as { variables?: Record<string, string> };
+      const [contextRes, tokenRes] = await Promise.all([
+        fetch(`/api/elevenlabs/context/${stayId}`),
+        fetch(
+          `/api/elevenlabs/conversation-token?agentId=${encodeURIComponent(agentId)}`,
+        ),
+      ]);
+      const context = (await contextRes.json()) as {
+        variables?: Record<string, string>;
+      };
+      const tokenData = (await tokenRes.json()) as {
+        token?: string;
+        error?: string;
+      };
+      if (!tokenRes.ok || !tokenData.token) {
+        const msg =
+          tokenData.error ?? `Could not get conversation token (${tokenRes.status}).`;
+        setError(msg);
+        return;
+      }
       conversation.startSession({
-        agentId,
+        // Private agents require a server-fetched conversationToken; passing
+        // agentId directly only works for public agents and would 401 here.
+        conversationToken: tokenData.token,
         connectionType: "webrtc",
-        dynamicVariables: data.variables ?? {},
+        dynamicVariables: context.variables ?? {},
       });
     } catch (err) {
       console.error("[rose-call] failed to start", err);
+      setError(err instanceof Error ? err.message : "Failed to start call.");
     }
   }
 
@@ -201,6 +230,12 @@ function RoseCallButtonInner({
           Call ended. Save the transcript to the stay — Rose will extract the
           intake, post the call card in the staff thread, and advance the
           scene.
+        </div>
+      )}
+
+      {error && (
+        <div className="rw-enter border-t border-clay/30 bg-clay/5 px-5 py-3 text-[12px] leading-5 text-clay">
+          {error}
         </div>
       )}
     </div>

@@ -48,6 +48,7 @@ function TalkToRoseInner({
 }: Props) {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [savePending, startSave] = useTransition();
   const startTimeRef = useRef(0);
 
@@ -56,7 +57,16 @@ function TalkToRoseInner({
       startTimeRef.current = Date.now();
     },
     onDisconnect: () => setDone(true),
-    onError: (err: unknown) => console.error("[talk-to-rose]", err),
+    onError: (err: unknown) => {
+      console.error("[talk-to-rose]", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+            ? err
+            : "Conversation error — see console for details.",
+      );
+    },
     onMessage: (msg: unknown) => {
       const m = msg as { source?: string; message?: string; text?: string };
       const line = m.message ?? m.text ?? "";
@@ -75,16 +85,36 @@ function TalkToRoseInner({
     if (!agentId) return;
     setTranscript([]);
     setDone(false);
+    setError(null);
     try {
-      const res = await fetch(`/api/elevenlabs/context/${stayId}`);
-      const data = (await res.json()) as { variables?: Record<string, string> };
+      const [contextRes, tokenRes] = await Promise.all([
+        fetch(`/api/elevenlabs/context/${stayId}`),
+        fetch(
+          `/api/elevenlabs/conversation-token?agentId=${encodeURIComponent(agentId)}`,
+        ),
+      ]);
+      const context = (await contextRes.json()) as {
+        variables?: Record<string, string>;
+      };
+      const tokenData = (await tokenRes.json()) as {
+        token?: string;
+        error?: string;
+      };
+      if (!tokenRes.ok || !tokenData.token) {
+        setError(
+          tokenData.error ?? `Could not get conversation token (${tokenRes.status}).`,
+        );
+        return;
+      }
       conversation.startSession({
-        agentId,
+        // Private agents require a server-fetched conversationToken.
+        conversationToken: tokenData.token,
         connectionType: "webrtc",
-        dynamicVariables: data.variables ?? {},
+        dynamicVariables: context.variables ?? {},
       });
     } catch (err) {
       console.error("[talk-to-rose] failed", err);
+      setError(err instanceof Error ? err.message : "Failed to start call.");
     }
   }
   function end() {
@@ -175,6 +205,10 @@ function TalkToRoseInner({
             </li>
           ))}
         </ul>
+      )}
+
+      {error && (
+        <p className="rw-enter mt-3 text-[12px] leading-5 text-clay">{error}</p>
       )}
     </div>
   );
