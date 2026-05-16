@@ -88,15 +88,43 @@ export async function POST(req: NextRequest) {
     data = { raw: text };
   }
 
+  // Surface ElevenLabs HTTP-level errors (4xx/5xx) untouched.
   if (!res.ok) {
-    console.error("[outbound-call] ElevenLabs returned", res.status, data);
+    console.error("[outbound-call] ElevenLabs HTTP error", res.status, data);
+    const elError = (data as { detail?: { message?: string }; message?: string }) ?? {};
+    const elMessage =
+      elError.detail?.message ??
+      elError.message ??
+      `ElevenLabs returned ${res.status}`;
     return NextResponse.json(
-      { error: "elevenlabs_error", status: res.status, details: data },
+      { error: elMessage, status: res.status, details: data },
       { status: res.status },
     );
   }
 
-  const d = data as { conversation_id?: string; callSid?: string };
+  // ElevenLabs Twilio outbound-call returns HTTP 200 even on failures, with
+  // { success: false, message: "..." }. Treat that as an error too — otherwise
+  // the client just sees "outbound call failed (200)" with no clue why.
+  const d = data as {
+    success?: boolean;
+    message?: string;
+    conversation_id?: string;
+    callSid?: string;
+  };
+
+  if (d.success === false || !d.conversation_id) {
+    console.error("[outbound-call] ElevenLabs reported failure", d);
+    return NextResponse.json(
+      {
+        error:
+          d.message ??
+          "ElevenLabs returned no conversation_id (check agent phone-number assignment, Twilio credit, and number format)",
+        details: data,
+      },
+      { status: 502 },
+    );
+  }
+
   return NextResponse.json({
     conversationId: d.conversation_id,
     callSid: d.callSid,

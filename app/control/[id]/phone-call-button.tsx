@@ -37,6 +37,7 @@ export function PhoneCallButton({
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<unknown>(null);
   const [savePending, startSave] = useTransition();
   const pollRef = useRef<number | null>(null);
 
@@ -49,6 +50,7 @@ export function PhoneCallButton({
 
   async function placeCall() {
     setError(null);
+    setErrorDetails(null);
     setTranscript([]);
     setAudioUrl(null);
     setStatus("dialing");
@@ -64,6 +66,7 @@ export function PhoneCallButton({
       };
       if (!res.ok || !data.conversationId) {
         setError(data.error ?? `outbound call failed (${res.status})`);
+        setErrorDetails(data.details ?? null);
         setStatus("error");
         return;
       }
@@ -225,7 +228,17 @@ export function PhoneCallButton({
 
       {error && (
         <div className="border-t border-clay/30 bg-clay/5 px-5 py-3 text-[12px] leading-5 text-clay">
-          {error}
+          <p>{error}</p>
+          {errorDetails !== null && errorDetails !== undefined && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-[10.5px] uppercase tracking-[0.2em] text-clay/70 hover:text-clay">
+                ElevenLabs response
+              </summary>
+              <pre className="mt-2 overflow-x-auto rounded-sm bg-paper/60 p-2 text-[11px] leading-5 text-ink-soft">
+                {JSON.stringify(errorDetails, null, 2)}
+              </pre>
+            </details>
+          )}
         </div>
       )}
     </div>
