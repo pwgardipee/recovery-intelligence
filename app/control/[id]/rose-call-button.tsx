@@ -1,6 +1,9 @@
 "use client";
 
-import { useConversation } from "@elevenlabs/react";
+import {
+  ConversationProvider,
+  useConversation,
+} from "@elevenlabs/react";
 import { useRef, useState, useTransition } from "react";
 
 /**
@@ -10,9 +13,18 @@ import { useRef, useState, useTransition } from "react";
  * the call ends, we POST the transcript to /api/intake/from-call which runs
  * interpretIntake() and saves a real intake record, then advances the scene.
  *
- * Requires NEXT_PUBLIC_ELEVENLABS_AGENT_ID — set up the agent at
- * elevenlabs.io/app/agents with the intake question script.
+ * The ElevenLabs SDK requires a ConversationProvider around any consumer of
+ * useConversation, so we split the component in two: the outer wrapper that
+ * provides context, and the inner body that uses the hook.
  */
+
+interface Props {
+  stayId: number;
+  agentId: string | null;
+  guestName: string;
+  guestPhone: string;
+  onCallComplete: () => void;
+}
 
 interface TranscriptEntry {
   who: "rose" | "maya";
@@ -20,23 +32,28 @@ interface TranscriptEntry {
   at: number;
 }
 
-export function RoseCallButton({
+export function RoseCallButton(props: Props) {
+  if (!props.agentId) {
+    return <NotConfigured />;
+  }
+  return (
+    <ConversationProvider>
+      <RoseCallButtonInner {...props} />
+    </ConversationProvider>
+  );
+}
+
+function RoseCallButtonInner({
   stayId,
   agentId,
   guestName,
   guestPhone,
   onCallComplete,
-}: {
-  stayId: number;
-  agentId: string | null;
-  guestName: string;
-  guestPhone: string;
-  onCallComplete: () => void;
-}) {
+}: Props) {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [done, setDone] = useState(false);
   const [savePending, startSave] = useTransition();
-  const startTimeRef = useRef<number>(0);
+  const startTimeRef = useRef(0);
 
   const conversation = useConversation({
     onConnect: () => {
@@ -49,7 +66,6 @@ export function RoseCallButton({
       console.error("[rose-call]", err);
     },
     onMessage: (msg: unknown) => {
-      // The SDK emits different message shapes depending on source.
       const m = msg as { source?: string; message?: string; text?: string };
       const line = m.message ?? m.text ?? "";
       if (!line) return;
@@ -63,22 +79,19 @@ export function RoseCallButton({
     | "connecting"
     | "disconnected";
 
-  async function start() {
+  function start() {
     if (!agentId) return;
     setTranscript([]);
     setDone(false);
     try {
-      await conversation.startSession({
-        agentId,
-        connectionType: "webrtc",
-      });
+      conversation.startSession({ agentId, connectionType: "webrtc" });
     } catch (err) {
       console.error("[rose-call] failed to start", err);
     }
   }
 
-  async function end() {
-    await conversation.endSession();
+  function end() {
+    conversation.endSession();
     setDone(true);
   }
 
@@ -101,31 +114,6 @@ export function RoseCallButton({
       setDone(false);
       onCallComplete();
     });
-  }
-
-  if (!agentId) {
-    return (
-      <div className="rw-card border-amber/30 bg-amber/5 px-5 py-4">
-        <p className="text-[11px] uppercase tracking-[0.22em] text-amber">
-          Live call · not yet configured
-        </p>
-        <p className="mt-2 text-[13px] leading-6 text-ink-soft">
-          Create an agent at{" "}
-          <a
-            href="https://elevenlabs.io/app/agents"
-            target="_blank"
-            rel="noreferrer"
-            className="underline-offset-4 hover:text-ink"
-          >
-            elevenlabs.io/app/agents
-          </a>{" "}
-          (system prompt: the four intake questions in HOUSE_RULES; voice:
-          Charlotte). Set <code>NEXT_PUBLIC_ELEVENLABS_AGENT_ID</code> in{" "}
-          <code>.env.local</code> and restart. The scripted scene 3 still
-          plays without this.
-        </p>
-      </div>
-    );
   }
 
   return (
@@ -207,6 +195,30 @@ export function RoseCallButton({
           scene.
         </div>
       )}
+    </div>
+  );
+}
+
+function NotConfigured() {
+  return (
+    <div className="rw-card border-amber/30 bg-amber/5 px-5 py-4">
+      <p className="text-[11px] uppercase tracking-[0.22em] text-amber">
+        Live call · not yet configured
+      </p>
+      <p className="mt-2 text-[13px] leading-6 text-ink-soft">
+        Create an agent at{" "}
+        <a
+          href="https://elevenlabs.io/app/agents"
+          target="_blank"
+          rel="noreferrer"
+          className="underline-offset-4 hover:text-ink"
+        >
+          elevenlabs.io/app/agents
+        </a>{" "}
+        (system prompt: the four intake questions; voice: Charlotte). Set{" "}
+        <code>NEXT_PUBLIC_ELEVENLABS_AGENT_ID</code> in <code>.env.local</code>{" "}
+        and restart. The scripted scene 3 still plays without this.
+      </p>
     </div>
   );
 }

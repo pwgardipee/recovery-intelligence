@@ -1,6 +1,9 @@
 "use client";
 
-import { useConversation } from "@elevenlabs/react";
+import {
+  ConversationProvider,
+  useConversation,
+} from "@elevenlabs/react";
 import { useRef, useState, useTransition } from "react";
 
 /**
@@ -8,26 +11,41 @@ import { useRef, useState, useTransition } from "react";
  * presenter's call, but framed as a conversation the guest initiates.
  * When done, the transcript flows into the same /api/intake/from-call
  * pipeline that the typed form uses.
+ *
+ * Wraps useConversation in a ConversationProvider as the SDK requires.
  */
+
+interface Props {
+  stayId: number;
+  agentId: string | null;
+  guestName: string;
+  guestPhone: string;
+  onCallComplete: () => void;
+}
 
 interface TranscriptEntry {
   who: "rose" | "guest";
   line: string;
 }
 
-export function TalkToRose({
+export function TalkToRose(props: Props) {
+  if (!props.agentId) {
+    return <NotConfigured />;
+  }
+  return (
+    <ConversationProvider>
+      <TalkToRoseInner {...props} />
+    </ConversationProvider>
+  );
+}
+
+function TalkToRoseInner({
   stayId,
   agentId,
   guestName,
   guestPhone: _guestPhone,
   onCallComplete,
-}: {
-  stayId: number;
-  agentId: string | null;
-  guestName: string;
-  guestPhone: string;
-  onCallComplete: () => void;
-}) {
+}: Props) {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [done, setDone] = useState(false);
   const [savePending, startSave] = useTransition();
@@ -53,18 +71,18 @@ export function TalkToRose({
     | "connecting"
     | "disconnected";
 
-  async function start() {
+  function start() {
     if (!agentId) return;
     setTranscript([]);
     setDone(false);
     try {
-      await conversation.startSession({ agentId, connectionType: "webrtc" });
+      conversation.startSession({ agentId, connectionType: "webrtc" });
     } catch (err) {
       console.error("[talk-to-rose] failed", err);
     }
   }
-  async function end() {
-    await conversation.endSession();
+  function end() {
+    conversation.endSession();
     setDone(true);
   }
   function save() {
@@ -84,21 +102,6 @@ export function TalkToRose({
       });
       onCallComplete();
     });
-  }
-
-  if (!agentId) {
-    return (
-      <div className="rounded-sm border border-amber/30 bg-amber/5 px-5 py-4">
-        <p className="text-[11px] uppercase tracking-[0.22em] text-amber">
-          Voice not yet configured
-        </p>
-        <p className="mt-2 text-[13px] leading-6 text-ink-soft">
-          For the live voice option, set{" "}
-          <code>NEXT_PUBLIC_ELEVENLABS_AGENT_ID</code> in <code>.env.local</code>.
-          The form below works fully without it.
-        </p>
-      </div>
-    );
   }
 
   return (
@@ -167,6 +170,21 @@ export function TalkToRose({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function NotConfigured() {
+  return (
+    <div className="rounded-sm border border-amber/30 bg-amber/5 px-5 py-4">
+      <p className="text-[11px] uppercase tracking-[0.22em] text-amber">
+        Voice not yet configured
+      </p>
+      <p className="mt-2 text-[13px] leading-6 text-ink-soft">
+        For the live voice option, set{" "}
+        <code>NEXT_PUBLIC_ELEVENLABS_AGENT_ID</code> in <code>.env.local</code>.
+        The form below works fully without it.
+      </p>
     </div>
   );
 }
