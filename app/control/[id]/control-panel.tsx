@@ -29,6 +29,7 @@ export function ControlPanel({
   guestPhone,
   aiReady,
   steps,
+  whoop,
 }: {
   stayId: number;
   currentScene: number;
@@ -45,9 +46,18 @@ export function ControlPanel({
     hasCall: boolean;
     hasBrief: boolean;
   };
+  whoop: {
+    connected: boolean;
+    lastSyncedAt: string | null;
+  };
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(
+    whoop.lastSyncedAt,
+  );
 
   // When the presenter switches back from the guest form tab, re-fetch state
   // so the step indicator flips from available → done.
@@ -95,6 +105,36 @@ export function ControlPanel({
       });
       router.refresh();
     });
+  }
+
+  async function refreshWhoopSignal() {
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      const res = await fetch("/api/whoop/refresh-snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stayId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        error?: string;
+        lastSyncedAt?: string | null;
+      };
+      if (!res.ok || !data.ok) {
+        setRefreshError(
+          data.message || data.error || `Refresh failed (${res.status})`,
+        );
+      } else {
+        setRefreshedAt(data.lastSyncedAt ?? new Date().toISOString());
+        router.refresh();
+      }
+    } catch (err) {
+      setRefreshError(err instanceof Error ? err.message : "Refresh failed");
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   // Use a stable window name so re-clicking focuses the existing tab instead
@@ -159,7 +199,7 @@ export function ControlPanel({
             Pre-trip
           </h2>
           <span className="text-[10px] uppercase tracking-[0.32em] text-ink-muted">
-            three steps · in order
+            four steps · in order
           </span>
         </div>
         <p className="font-serif mt-2 text-[14px] italic text-ink-muted">
@@ -220,9 +260,51 @@ export function ControlPanel({
             }
           />
 
-          {/* Step 3 — Call the day before (auto-refreshes the brief) */}
+          {/* Step 3 — Refresh Whoop signal (re-reads workouts/sleep, regenerates brief) */}
           <DemoStep
             number={3}
+            title="Refresh Whoop signal"
+            description="If she just did a workout — archery, Barry's Bootcamp, a long run — pull her latest Whoop signal and regenerate the brief. The staff thread updates with refuel cues (protein, electrolytes), softer or fuller pacing, and any room-prep that changed."
+            status={
+              !steps.hasIntake
+                ? "locked"
+                : !whoop.connected
+                  ? "available"
+                  : "available"
+            }
+            lockedNote="Complete the email step first."
+            action={
+              <div className="flex flex-col items-start gap-2">
+                <button
+                  onClick={refreshWhoopSignal}
+                  disabled={refreshing || !whoop.connected}
+                  className="group flex items-center gap-2 rounded-sm bg-forest px-5 py-2.5 text-[11px] uppercase tracking-[0.22em] text-cream hover:bg-forest-deep disabled:opacity-50"
+                >
+                  {refreshing ? "Pulling latest…" : "Refresh Whoop signal"}
+                  <ExternalArrow />
+                </button>
+                {!whoop.connected && (
+                  <p className="text-[10.5px] uppercase tracking-[0.22em] text-amber">
+                    Connect Whoop on the guest form first
+                  </p>
+                )}
+                {refreshedAt && !refreshError && (
+                  <p className="text-[10.5px] uppercase tracking-[0.22em] text-ink-muted">
+                    Last pulled · {formatRelativeTime(refreshedAt)}
+                  </p>
+                )}
+                {refreshError && (
+                  <p className="text-[10.5px] uppercase tracking-[0.22em] text-amber">
+                    {refreshError}
+                  </p>
+                )}
+              </div>
+            }
+          />
+
+          {/* Step 4 — Call the day before (auto-refreshes the brief) */}
+          <DemoStep
+            number={4}
             title="Call the day before"
             description="Rose dials a real phone via Twilio — already knowing everything from the form plus carried-forward facts. Transcript and audio stream live to this card. The arrival brief in the staff thread refines itself the moment the call ends."
             status={
@@ -486,6 +568,20 @@ function SceneDots({
       ))}
     </div>
   );
+}
+
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "just now";
+  const diffSec = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (diffSec < 5) return "just now";
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.round(diffHr / 24);
+  return `${diffDay}d ago`;
 }
 
 function ExternalArrow() {

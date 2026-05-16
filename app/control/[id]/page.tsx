@@ -1,15 +1,17 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { db } from "@/lib/db";
 import {
+  consentRecords,
   guests,
   intakeAnswers,
   messages,
   properties,
   stays,
 } from "@/lib/db/rhythm-schema";
+import { whoopConnections } from "@/lib/db/schema";
 import { SCENE_TITLES } from "@/lib/rhythm/scenes";
 import { isAnthropicConfigured } from "@/lib/ai/anthropic";
 
@@ -82,6 +84,35 @@ export default async function ControlPage({
     hasBrief: Boolean(briefRow),
   };
 
+  // Whoop link state for the "Refresh Whoop signal" step.
+  const [whoopConsent] = await db
+    .select()
+    .from(consentRecords)
+    .where(
+      and(
+        eq(consentRecords.stayId, stayId),
+        eq(consentRecords.source, "whoop"),
+        eq(consentRecords.active, true),
+      ),
+    )
+    .orderBy(desc(consentRecords.connectedAt))
+    .limit(1);
+
+  let whoopLastSyncedAt: string | null = null;
+  if (whoopConsent?.whoopUserId) {
+    const [conn] = await db
+      .select({ lastSyncedAt: whoopConnections.lastSyncedAt })
+      .from(whoopConnections)
+      .where(eq(whoopConnections.whoopUserId, whoopConsent.whoopUserId))
+      .limit(1);
+    whoopLastSyncedAt = conn?.lastSyncedAt?.toISOString() ?? null;
+  }
+
+  const whoop = {
+    connected: Boolean(whoopConsent?.whoopUserId),
+    lastSyncedAt: whoopLastSyncedAt,
+  };
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-ivory">
       <div
@@ -144,6 +175,7 @@ export default async function ControlPage({
           guestPhone={row.guest.phone}
           aiReady={aiReady}
           steps={steps}
+          whoop={whoop}
         />
 
         <footer className="mt-auto pt-12 text-[11px] text-ink-muted">

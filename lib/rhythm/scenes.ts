@@ -91,6 +91,21 @@ export async function resetStay(stayId: number): Promise<void> {
   await db.update(stays).set({ demoScene: 0 }).where(eq(stays.id, stayId));
 }
 
+/**
+ * Re-runs the arrival-brief generation against current data (a fresh
+ * snapshot of whoop_*) and replaces the existing arrival_brief in the
+ * staff thread. Safe to call repeatedly — drives the "Refresh Whoop
+ * signal" button on /control. Idempotent: deletes any prior arrival_brief
+ * row for this stay before inserting the new one, so the staff thread
+ * doesn't accumulate duplicates.
+ */
+export async function regenerateArrivalBrief(stayId: number): Promise<void> {
+  await db
+    .delete(messages)
+    .where(and(eq(messages.stayId, stayId), eq(messages.kind, "arrival_brief")));
+  await runScene4ArrivalBrief(stayId);
+}
+
 export async function approveMessage(messageId: number): Promise<void> {
   const [m] = await db
     .select()
