@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { guests, properties, stays } from "@/lib/db/rhythm-schema";
 import { isAnthropicConfigured } from "@/lib/ai/anthropic";
 
+import { BeginDemoButton } from "./begin-demo-button";
+
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
@@ -66,6 +68,11 @@ export default async function Home() {
             actually arrive in, with consent kept visible and the data kept
             out of sight.
           </p>
+
+          {/* Primary CTA */}
+          <div className="mt-12">
+            <BeginDemoButton />
+          </div>
         </section>
 
         {/* Status row */}
@@ -90,7 +97,12 @@ export default async function Home() {
         {/* Stays */}
         <section className="mt-12">
           <p className="text-[0.625rem] uppercase tracking-[0.32em] text-ink-muted">
-            Demo stays
+            Existing stays
+          </p>
+          <p className="mt-1.5 text-[12px] text-ink-muted">
+            Each row opens directly into the concierge thread (the demo
+            surface). Use <em className="not-italic font-medium">Begin the demo</em> above to
+            reset state mid-rehearsal.
           </p>
 
           {rows.length === 0 ? (
