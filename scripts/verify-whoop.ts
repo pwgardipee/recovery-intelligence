@@ -1,5 +1,4 @@
-import { config } from "dotenv";
-config({ path: ".env.local" });
+import "./_env";
 
 import { createHmac } from "node:crypto";
 
