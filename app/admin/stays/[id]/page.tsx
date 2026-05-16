@@ -208,23 +208,12 @@ function OverviewTab({
   return (
     <div className="space-y-8">
       {/* Stat strip */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
         <Stat label="Phase" value={prettyPhase(stay.phase)} accent="moss" />
-        <Stat label="Demo scene" value={`#${stay.demoScene}`} accent="ink" />
-        <Stat
-          label="Connected"
-          value={String(activeConsents.length)}
-          accent={activeConsents.length > 0 ? "emerald" : "ink"}
-        />
         <Stat
           label="Pending approvals"
           value={String(staffPendingCount)}
           accent={staffPendingCount > 0 ? "amber" : "ink"}
-        />
-        <Stat
-          label="Voice calls"
-          value={String(voiceCallCount)}
-          accent="gold"
         />
       </div>
 

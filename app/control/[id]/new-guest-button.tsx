@@ -4,16 +4,15 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 /**
- * The hero CTA on the home page. Click → an inline form appears for naming
- * a new guest (defaults to a "returning Rosewood guest" so Step 1 has
- * memory facts to carry forward). On submit, creates the guest + stay and
- * routes to the presenter remote.
+ * Spawn a brand-new demo guest from the control panel. Used for live audience
+ * demos where the presenter wants to show the flow against a fresh name
+ * (e.g. someone in the room volunteering) rather than the seeded Maya.
  */
-export function BeginDemoButton() {
+export function NewGuestButton() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("Tavishi");
-  const [phone, setPhone] = useState("+12626857807");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [returning, setReturning] = useState(true);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -49,40 +48,20 @@ export function BeginDemoButton() {
 
   if (!open) {
     return (
-      <div className="flex flex-col items-start gap-3">
-        <button
-          onClick={() => setOpen(true)}
-          className="group flex items-center gap-3 rounded-sm bg-forest px-6 py-3.5 text-[12px] uppercase tracking-[0.22em] text-cream hover:bg-forest-deep"
-        >
-          <span>Begin the demo</span>
-          <svg
-            width="22"
-            height="14"
-            viewBox="0 0 22 14"
-            fill="none"
-            className="transition-transform group-hover:translate-x-1"
-          >
-            <path
-              d="M1 7h19m0 0L14 1m6 6l-6 6"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
-        <p className="max-w-md text-[11px] italic text-ink-muted">
-          Create a fresh guest by name and open the presenter remote. Each
-          run starts clean — Rose carries forward whatever cross-property
-          memory you toggle on.
-        </p>
-      </div>
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-2 rounded-sm border border-line bg-paper px-3 py-1.5 text-[11px] uppercase tracking-[0.2em] text-ink-soft hover:border-gold hover:text-forest"
+      >
+        <span className="text-[14px] leading-none text-gold">+</span>
+        New demo guest
+      </button>
     );
   }
 
   return (
     <form
       onSubmit={submit}
-      className="rw-enter rw-card flex w-full max-w-lg flex-col gap-4 px-6 py-6"
+      className="rw-enter rw-card flex w-full max-w-md flex-col gap-3 px-4 py-4 sm:absolute sm:right-0 sm:top-12 sm:z-10 sm:w-[420px]"
     >
       <div className="flex items-baseline justify-between">
         <p className="text-[10px] uppercase tracking-[0.32em] text-gold">
@@ -106,7 +85,7 @@ export function BeginDemoButton() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g., Tilly Park"
-          className="font-serif mt-1.5 w-full border-b border-line bg-transparent py-2 text-[18px] leading-7 text-forest placeholder:text-ink-muted focus:border-gold focus:outline-none"
+          className="mt-1 w-full border-b border-line bg-transparent py-1.5 text-[15px] leading-7 text-forest placeholder:text-ink-muted focus:border-gold focus:outline-none"
         />
       </label>
 
@@ -118,11 +97,11 @@ export function BeginDemoButton() {
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="+1 415 555 0123"
-          className="mt-1.5 w-full border-b border-line bg-transparent py-2 text-[15px] text-forest placeholder:text-ink-muted focus:border-gold focus:outline-none"
+          className="mt-1 w-full border-b border-line bg-transparent py-1.5 text-[14px] text-forest placeholder:text-ink-muted focus:border-gold focus:outline-none"
         />
       </label>
 
-      <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-line bg-cream/40 px-4 py-3">
+      <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-line bg-cream/40 px-3 py-2.5">
         <input
           type="checkbox"
           checked={returning}
@@ -135,38 +114,22 @@ export function BeginDemoButton() {
           </span>
           <span className="block text-[11.5px] italic text-ink-muted">
             Seeds 4 preferences from prior Rosewood stays so Step 1 has
-            facts to carry forward. Leave checked for the strongest demo.
+            something real to carry forward.
           </span>
         </span>
       </label>
 
       {error && (
-        <p className="rw-enter text-[12px] text-clay">
-          Something snagged: {error}
-        </p>
+        <p className="rw-enter text-[12px] text-clay">{error}</p>
       )}
 
-      <div className="flex items-center justify-end gap-3 pt-2">
+      <div className="flex items-center justify-end gap-2">
         <button
           type="submit"
           disabled={pending || !name.trim()}
-          className="group flex items-center gap-3 rounded-sm bg-forest px-6 py-3 text-[12px] uppercase tracking-[0.22em] text-cream hover:bg-forest-deep disabled:opacity-40"
+          className="rounded-sm bg-forest px-4 py-2 text-[11px] uppercase tracking-[0.22em] text-cream hover:bg-forest-deep disabled:opacity-40"
         >
-          <span>{pending ? "Creating…" : "Create & open"}</span>
-          <svg
-            width="22"
-            height="14"
-            viewBox="0 0 22 14"
-            fill="none"
-            className="transition-transform group-hover:translate-x-1"
-          >
-            <path
-              d="M1 7h19m0 0L14 1m6 6l-6 6"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-            />
-          </svg>
+          {pending ? "Creating…" : "Create & open →"}
         </button>
       </div>
     </form>

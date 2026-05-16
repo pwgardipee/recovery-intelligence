@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { TalkToRose } from "./talk-to-rose";
@@ -92,6 +92,75 @@ export function PreArrivalForm({
     setExperiences((prev) =>
       prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v],
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // Live auto-fill — driven by the control panel via BroadcastChannel. The
+  // presenter clicks "Fill form live" on /control and the form on this tab
+  // animates each field empty → filled, then auto-submits. The demo's
+  // theatrical "Rose typing the answers for you" moment.
+  // -------------------------------------------------------------------------
+
+  const fillingRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(`rose-form-${stayId}`);
+    channel.onmessage = async (event: MessageEvent) => {
+      const msg = event.data as { type: string; payload?: FillPayload };
+      if (msg.type === "fill" && !fillingRef.current && !submitted) {
+        fillingRef.current = true;
+        try {
+          await autoFill(msg.payload ?? defaultFill);
+        } finally {
+          fillingRef.current = false;
+        }
+      }
+    };
+    return () => channel.close();
+  }, [stayId, submitted]);
+
+  async function autoFill(p: FillPayload) {
+    // Scroll user to top so they see the form as it fills.
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    await wait(400);
+
+    await typeInto(setFlight, p.flight);
+    await wait(280);
+
+    setVibe(p.vibe);
+    await wait(280);
+
+    // Reset and re-add comfort flags one at a time so audience watches them light up.
+    setComfort([]);
+    await wait(160);
+    for (const flag of p.comfort) {
+      setComfort((prev) => [...prev, flag]);
+      await wait(180);
+    }
+    await wait(180);
+
+    setExperiences([]);
+    await wait(160);
+    for (const exp of p.experiences) {
+      setExperiences((prev) => [...prev, exp]);
+      await wait(180);
+    }
+    await wait(220);
+
+    await typeInto(setScent, p.scent);
+    await wait(240);
+
+    setContactPreference(p.contactPreference);
+    await wait(280);
+
+    await typeInto(setCompanion, p.companion);
+    await wait(240);
+
+    await typeInto(setAnythingElse, p.anythingElse);
+    // No auto-submit — the presenter clicks "Send to Rose" themselves so
+    // the timing of the magic moment is theirs.
   }
 
   function connectWhoop() {
@@ -579,4 +648,63 @@ function composeTranscript(input: {
   if (input.anythingElse.trim()) lines.push(`${input.guestName}: ${input.anythingElse.trim()}`);
   lines.push(`Rose: Got it — we'll have it ready.`);
   return lines.join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// Live auto-fill helpers
+// ---------------------------------------------------------------------------
+
+export interface FillPayload {
+  flight: string;
+  vibe: string;
+  comfort: string[];
+  experiences: string[];
+  scent: string;
+  contactPreference: "sms" | "voice" | "either";
+  companion: string;
+  anythingElse: string;
+}
+
+const defaultFill: FillPayload = {
+  flight: "AA 8 — JFK to SFO, lands Thu 7:42am",
+  vibe: "restorative",
+  comfort: [
+    "quiet_first_night",
+    "softer_pacing",
+    "late_breakfast",
+    "cycle_comfort",
+  ],
+  experiences: ["Asaya spa / recovery", "Garden walk / hike", "Wine tasting"],
+  scent: "lavender, like the Hotel de Crillon room",
+  contactPreference: "sms",
+  companion: "Alex (partner) — joining Saturday for our anniversary",
+  anythingElse:
+    "Board dinner Friday — please nothing intense before then. Move the wine tasting to Saturday so Alex can join.",
+};
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function typeInto(
+  setter: (value: string) => void,
+  text: string,
+  msPerChar = 28,
+): Promise<void> {
+  return new Promise((resolve) => {
+    if (!text) {
+      setter("");
+      resolve();
+      return;
+    }
+    let i = 0;
+    const interval = setInterval(() => {
+      i += 1;
+      setter(text.slice(0, i));
+      if (i >= text.length) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, msPerChar);
+  });
 }

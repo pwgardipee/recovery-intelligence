@@ -173,22 +173,79 @@ function ConsentStrip({
 function IdentityMerge({
   content,
 }: {
-  content: { headline: string; properties: string[] };
+  content: {
+    headline: string;
+    properties: string[];
+    factsCarried?: Array<{
+      fact: string;
+      kind?: string;
+      source?: string | null;
+      confidence?: number;
+    }>;
+    summary?: string;
+  };
 }) {
+  const facts = content.factsCarried ?? [];
   return (
-    <div className="rw-card px-5 py-4">
-      <p className="text-[11px] uppercase tracking-[0.22em] text-gold">
-        Profile resolution
-      </p>
-      <p className="mt-2 text-[14px] leading-6 text-forest">{content.headline}</p>
-      <ul className="mt-3 space-y-1 text-[12.5px] text-ink-soft">
-        {content.properties.map((p) => (
-          <li key={p} className="flex items-center gap-2">
-            <span className="h-1 w-1 rounded-full bg-gold" />
-            {p}
-          </li>
-        ))}
-      </ul>
+    <div className="rw-card overflow-hidden">
+      <div className="border-b border-line bg-forest px-5 py-4 text-cream">
+        <p className="rw-monogram text-[10px] tracking-[0.32em] text-gold-soft">
+          CROSS-PROPERTY · PROFILE RESOLUTION
+        </p>
+        <p className="font-serif mt-2 text-[15px] leading-snug text-paper">
+          {content.headline}
+        </p>
+        {content.summary && (
+          <p className="mt-2 text-[12.5px] italic text-cream/85">
+            {content.summary}
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 px-5 py-4 sm:grid-cols-[180px_1fr]">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
+            Properties unified
+          </p>
+          <ul className="mt-2 space-y-1 text-[12.5px] text-ink-soft">
+            {content.properties.map((p) => (
+              <li key={p} className="flex items-start gap-2">
+                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                <span>{p}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
+            Carried forward
+          </p>
+          {facts.length === 0 ? (
+            <p className="mt-2 text-[12.5px] italic text-ink-muted">
+              First Rosewood stay — no prior preferences on file.
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {facts.map((f, i) => (
+                <li
+                  key={i}
+                  className="rounded-sm border border-line bg-cream/40 px-3 py-2"
+                >
+                  <p className="font-serif text-[13px] leading-snug text-forest">
+                    {f.fact}
+                  </p>
+                  {f.source && (
+                    <p className="mt-1 text-[10.5px] uppercase tracking-[0.18em] text-ink-muted">
+                      from {f.source}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

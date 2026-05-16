@@ -1,9 +1,15 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { db } from "@/lib/db";
-import { guests, properties, stays } from "@/lib/db/rhythm-schema";
+import {
+  guests,
+  intakeAnswers,
+  messages,
+  properties,
+  stays,
+} from "@/lib/db/rhythm-schema";
 import { SCENE_TITLES } from "@/lib/rhythm/scenes";
 import { isAnthropicConfigured } from "@/lib/ai/anthropic";
 
@@ -37,6 +43,44 @@ export default async function ControlPage({
       process.env.ELEVENLABS_PHONE_NUMBER_ID,
   );
   const aiReady = isAnthropicConfigured();
+
+  // Step-completion flags that drive the step-by-step UI on /control.
+  const [identityRow] = await db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(
+      and(eq(messages.stayId, stayId), eq(messages.kind, "identity_merge")),
+    )
+    .limit(1);
+
+  const [intakeRow] = await db
+    .select({ id: intakeAnswers.id })
+    .from(intakeAnswers)
+    .where(eq(intakeAnswers.stayId, stayId))
+    .limit(1);
+
+  const [callRow] = await db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(
+      and(eq(messages.stayId, stayId), eq(messages.kind, "voice_call")),
+    )
+    .limit(1);
+
+  const [briefRow] = await db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(
+      and(eq(messages.stayId, stayId), eq(messages.kind, "arrival_brief")),
+    )
+    .limit(1);
+
+  const steps = {
+    hasIdentity: Boolean(identityRow),
+    hasIntake: Boolean(intakeRow),
+    hasCall: Boolean(callRow),
+    hasBrief: Boolean(briefRow),
+  };
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-ivory">
@@ -99,6 +143,7 @@ export default async function ControlPage({
           guestName={row.guest.name}
           guestPhone={row.guest.phone}
           aiReady={aiReady}
+          steps={steps}
         />
 
         <footer className="mt-auto pt-12 text-[11px] text-ink-muted">

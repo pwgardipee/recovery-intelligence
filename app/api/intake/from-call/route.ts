@@ -6,11 +6,17 @@ import { db } from "@/lib/db";
 import {
   guests,
   intakeAnswers,
+  memoryFacts,
   messages,
   properties,
+  signals,
   stays,
 } from "@/lib/db/rhythm-schema";
-import { interpretIntake } from "@/lib/ai/prompts";
+import {
+  generateArrivalBrief,
+  interpretIntake,
+  translateSignalsToHospitality,
+} from "@/lib/ai/prompts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -118,9 +124,87 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // ---------------------------------------------------------------------
+  // Auto-generate (or regenerate) the arrival brief.
+  //
+  // Step 2 (email submit) → first brief lands in the staff thread.
+  // Step 3 (call ends)    → brief is replaced with a richer version that
+  //                         folds in everything Rose learned on the call.
+  // We replace rather than append so the thread always shows ONE
+  // authoritative brief; the audience sees it appear after email and
+  // refine after the call.
+  // ---------------------------------------------------------------------
+
+  await db
+    .delete(messages)
+    .where(
+      and(
+        eq(messages.stayId, body.stayId),
+        eq(messages.kind, "arrival_brief"),
+      ),
+    );
+
+  try {
+    const guestSignals = await db
+      .select()
+      .from(signals)
+      .where(eq(signals.guestId, stay.guestId))
+      .orderBy(asc(signals.capturedAt))
+      .limit(5);
+
+    const signalSummary =
+      guestSignals
+        .map((s) =>
+          translateSignalsToHospitality(s.payload as Record<string, unknown>),
+        )
+        .join(" ") || "no notable signals; default to balanced pacing.";
+
+    const memoryRows = await db
+      .select()
+      .from(memoryFacts)
+      .where(eq(memoryFacts.guestId, stay.guestId))
+      .limit(12);
+
+    const brief = await generateArrivalBrief({
+      guest: {
+        name: guest.name,
+        occasion: stay.occasion,
+        mergedProfileCount: guest.mergedProfileCount,
+        contactPreference: guest.contactPreference,
+      },
+      property: {
+        name: property.name,
+        city: property.city,
+        senseOfPlace: property.senseOfPlace as Record<string, unknown>,
+      },
+      intake,
+      signalSummary,
+      memoryFacts: memoryRows.map((r) => ({ fact: r.fact, kind: r.kind })),
+    });
+
+    await db
+      .update(stays)
+      .set({ roomTempF: brief.roomPrep.temperatureF })
+      .where(eq(stays.id, stay.id));
+
+    await appendMessage(body.stayId, "staff", {
+      author: "rose",
+      authorRole: "ai",
+      kind: "arrival_brief",
+      content: {
+        brief,
+        propertyName: property.name,
+        guestName: guest.name,
+        revision: body.source === "pre_call" ? "after_call" : "after_email",
+      },
+    });
+  } catch (err) {
+    console.error("[intake/from-call] brief generation failed", err);
+  }
+
   // Bump scene forward so the rest of the demo continues.
-  if (stay.demoScene < 3) {
-    await db.update(stays).set({ demoScene: 3 }).where(eq(stays.id, stay.id));
+  if (stay.demoScene < 4) {
+    await db.update(stays).set({ demoScene: 4 }).where(eq(stays.id, stay.id));
   }
 
   revalidatePath(`/admin/stays/${body.stayId}`);
@@ -130,7 +214,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     intake,
-    sceneBumpedTo: Math.max(stay.demoScene, 3),
+    sceneBumpedTo: 4,
   });
 }
 

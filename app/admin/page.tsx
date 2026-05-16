@@ -46,8 +46,13 @@ export default async function AdminDashboardPage({
     return <SetupNeeded reason={dbError ?? "no_properties"} />;
   }
 
+  // Default to Sand Hill (Menlo Park) — the demo home property — when no
+  // explicit ?property selection has been made. Falls through to alphabetical
+  // first only if Sand Hill hasn't been seeded.
   const selected =
-    allProperties.find((p) => p.slug === requestedSlug) ?? allProperties[0];
+    allProperties.find((p) => p.slug === requestedSlug) ??
+    allProperties.find((p) => p.slug === "sand-hill") ??
+    allProperties[0];
 
   const propertyId = selected.id;
   const startOfToday = startOfDayUtc();
