@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
       occasion: intake.occasion,
       experiencesRequested: intake.experiencesRequested,
       flight: intake.flight,
+      companion: intake.companion,
       comfortFlags: intake.comfortFlags,
       summary: intake.summary,
       propertyName: property.name,

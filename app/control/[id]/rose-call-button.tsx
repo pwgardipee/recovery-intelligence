@@ -79,12 +79,20 @@ function RoseCallButtonInner({
     | "connecting"
     | "disconnected";
 
-  function start() {
+  async function start() {
     if (!agentId) return;
     setTranscript([]);
     setDone(false);
     try {
-      conversation.startSession({ agentId, connectionType: "webrtc" });
+      // Fetch the dynamic variables for this stay so Rose walks in already
+      // knowing her name, flight, occasion, companion, past preferences, etc.
+      const res = await fetch(`/api/elevenlabs/context/${stayId}`);
+      const data = (await res.json()) as { variables?: Record<string, string> };
+      conversation.startSession({
+        agentId,
+        connectionType: "webrtc",
+        dynamicVariables: data.variables ?? {},
+      });
     } catch (err) {
       console.error("[rose-call] failed to start", err);
     }

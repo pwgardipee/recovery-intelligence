@@ -215,6 +215,11 @@ function IntakeCard({
       arrivalTime?: string | null;
       notes?: string | null;
     } | null;
+    companion?: {
+      name?: string;
+      relationship?: string;
+      note?: string | null;
+    } | null;
     sourceLabel?: string;
     originalText?: string;
   };
@@ -251,25 +256,45 @@ function IntakeCard({
       </p>
       <div className="rw-rule mt-4" />
 
-      {hasFlight && (
-        <div className="mt-4 rounded-sm border border-line bg-cream/40 px-4 py-3">
-          <p className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
-            Flight
-          </p>
-          <p className="mt-1 font-serif text-[15px] text-forest">
-            {flight?.number}
-            {flight?.origin && flight?.destination
-              ? ` · ${flight.origin} → ${flight.destination}`
-              : ""}
-          </p>
-          {flight?.arrivalTime && (
-            <p className="text-[12px] text-ink-soft">
-              Lands {flight.arrivalTime}
-              {flight.notes ? ` · ${flight.notes}` : ""}
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {hasFlight && (
+          <div className="rounded-sm border border-line bg-cream/40 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
+              Flight
             </p>
-          )}
-        </div>
-      )}
+            <p className="mt-1 font-serif text-[15px] text-forest">
+              {flight?.number}
+              {flight?.origin && flight?.destination
+                ? ` · ${flight.origin} → ${flight.destination}`
+                : ""}
+            </p>
+            {flight?.arrivalTime && (
+              <p className="text-[12px] text-ink-soft">
+                Lands {flight.arrivalTime}
+                {flight.notes ? ` · ${flight.notes}` : ""}
+              </p>
+            )}
+          </div>
+        )}
+        {content.companion && content.companion.name && (
+          <div className="rounded-sm border border-line bg-cream/40 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
+              Travelling with
+            </p>
+            <p className="mt-1 font-serif text-[15px] text-forest">
+              {content.companion.name}
+              {content.companion.relationship
+                ? ` · ${content.companion.relationship}`
+                : ""}
+            </p>
+            {content.companion.note && (
+              <p className="text-[12px] italic text-ink-soft">
+                {content.companion.note}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       <dl className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-[12.5px]">
         <Field label="Arrival" value={content.vibe} />

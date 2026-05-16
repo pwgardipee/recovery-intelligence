@@ -162,10 +162,14 @@ I sleep cooler than most, but please flag cycle-aware comfort if that's
 an option — would mean a slightly warmer room and gentler pacing the
 first two days.
 
+Alex (my partner) is joining me Saturday — it's our anniversary, so
+something quiet and thoughtful for Saturday evening would mean a lot.
+Nothing announced or public.
+
 Experiences I'd love during the stay: Asaya recovery (Friday afternoon
 would be ideal), a long garden / oak grove walk, and the wine tasting if
-you can move it to Saturday. Please don't schedule anything intense
-before the Friday dinner.
+you can move it to Saturday so Alex can join. Please don't schedule
+anything intense before the Friday dinner.
 
 Mornings can be late on Friday — anything after 9 is great. Texts > calls,
 please. And the lavender scent in the room last time at Crillon was
@@ -220,6 +224,7 @@ Maya
       occasion: intake.occasion,
       experiencesRequested: intake.experiencesRequested,
       flight: intake.flight,
+      companion: intake.companion,
       comfortFlags: intake.comfortFlags,
       summary: intake.summary,
       propertyName: property.name,

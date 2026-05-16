@@ -71,12 +71,18 @@ function TalkToRoseInner({
     | "connecting"
     | "disconnected";
 
-  function start() {
+  async function start() {
     if (!agentId) return;
     setTranscript([]);
     setDone(false);
     try {
-      conversation.startSession({ agentId, connectionType: "webrtc" });
+      const res = await fetch(`/api/elevenlabs/context/${stayId}`);
+      const data = (await res.json()) as { variables?: Record<string, string> };
+      conversation.startSession({
+        agentId,
+        connectionType: "webrtc",
+        dynamicVariables: data.variables ?? {},
+      });
     } catch (err) {
       console.error("[talk-to-rose] failed", err);
     }

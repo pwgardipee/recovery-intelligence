@@ -76,6 +76,7 @@ export function PreArrivalForm({
   const [experiences, setExperiences] = useState<string[]>([]);
   const [scent, setScent] = useState("");
   const [contactPreference, setContactPreference] = useState<"sms" | "voice" | "either">("sms");
+  const [companion, setCompanion] = useState("");
   const [anythingElse, setAnythingElse] = useState("");
 
   function toggleComfort(v: string) {
@@ -106,6 +107,7 @@ export function PreArrivalForm({
         experiences,
         scent,
         contactPreference,
+        companion,
         anythingElse,
       });
 
@@ -332,6 +334,20 @@ export function PreArrivalForm({
             </div>
           </FormBlock>
 
+          {/* Companion */}
+          <FormBlock label="Travelling with anyone?">
+            <input
+              value={companion}
+              onChange={(e) => setCompanion(e.target.value)}
+              placeholder="e.g., Alex (partner) — joining Saturday for our anniversary"
+              className="w-full border-b border-line bg-transparent py-2 text-[16px] leading-7 text-forest placeholder:text-ink-muted focus:border-gold focus:outline-none"
+            />
+            <p className="mt-2 text-[11.5px] italic text-ink-muted">
+              We&rsquo;ll prep with both of you in mind — pacing, dining, any
+              occasion you&rsquo;re marking.
+            </p>
+          </FormBlock>
+
           {/* Scent */}
           <FormBlock label="A scent that has worked before (optional)">
             <input
@@ -532,6 +548,7 @@ function composeTranscript(input: {
   experiences: string[];
   scent: string;
   contactPreference: string;
+  companion: string;
   anythingElse: string;
 }): string {
   const lines: string[] = [];
@@ -540,6 +557,9 @@ function composeTranscript(input: {
   );
   if (input.flight) lines.push(`${input.guestName}: My flight is ${input.flight}.`);
   if (input.vibe) lines.push(`${input.guestName}: I'm arriving in a ${input.vibe} state of mind.`);
+  if (input.companion.trim()) {
+    lines.push(`${input.guestName}: I'm travelling with ${input.companion.trim()}.`);
+  }
   if (input.comfort.length > 0) {
     lines.push(
       `${input.guestName}: For comfort — ${input.comfort.join(", ").replace(/_/g, " ")}.`,

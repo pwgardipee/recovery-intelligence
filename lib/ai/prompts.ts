@@ -50,6 +50,12 @@ export interface FlightInfo {
   notes: string | null;         // "red-eye, light delays expected"
 }
 
+export interface Companion {
+  name: string;          // "Alex"
+  relationship: string;  // "partner", "spouse", "colleague", "friend"
+  note: string | null;   // "anniversary Saturday"
+}
+
 export interface IntakeAnswers {
   arrivalVibe: "restorative" | "social" | "productive" | "celebratory" | "exploratory";
   pacing: "slow" | "balanced" | "full";
@@ -63,6 +69,7 @@ export interface IntakeAnswers {
   comfortFlags: string[];           // includes "cycle_comfort" when opted in
   experiencesRequested: string[];   // e.g., ["asaya recovery", "oak grove walk"]
   flight: FlightInfo | null;
+  companion: Companion | null;      // who they're traveling with, if anyone
   summary: string;
 }
 
@@ -135,6 +142,7 @@ Return ONE JSON object with this exact shape (no prose, no markdown fences):
   "comfortFlags": string[],
   "experiencesRequested": string[],
   "flight": { "number": string|null, "origin": string|null, "destination": string|null, "arrivalTime": string|null, "notes": string|null } | null,
+  "companion": { "name": string, "relationship": string, "note": string|null } | null,
   "summary": string
 }
 
@@ -441,7 +449,7 @@ function fallbackIntake(): IntakeAnswers {
     contactPreference: "sms",
     wakeWindow: "8:30–10:00",
     eveningWindow: "after 6pm",
-    occasion: "board dinner Friday",
+    occasion: "board dinner Friday; anniversary Saturday",
     comfortFlags: ["softer_pacing", "quiet_first_night", "late_breakfast", "cycle_comfort"],
     experiencesRequested: [
       "Asaya recovery treatment",
@@ -455,7 +463,12 @@ function fallbackIntake(): IntakeAnswers {
       arrivalTime: "Thu 7:42am PT",
       notes: "Red-eye; 5h 23m flight, on time",
     },
-    summary: "Arriving from a red-eye before a board dinner; wants a slow first evening and a softer rhythm to feel human before Friday.",
+    companion: {
+      name: "Alex",
+      relationship: "partner",
+      note: "joining Saturday — anniversary",
+    },
+    summary: "Arriving solo from a red-eye for a board dinner Friday; her partner Alex joins Saturday for their anniversary. Slow first evening, softer rhythm before Friday, then a celebratory Saturday.",
   };
 }
 
