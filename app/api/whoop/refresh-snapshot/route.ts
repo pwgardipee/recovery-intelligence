@@ -1,9 +1,9 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db } from "@/lib/db";
 import { whoopConnections } from "@/lib/db/schema";
-import { consentRecords } from "@/lib/db/rhythm-schema";
+import { consentRecords, stays } from "@/lib/db/rhythm-schema";
 import { regenerateArrivalBrief } from "@/lib/rhythm/scenes";
 import { backfill } from "@/lib/whoop/sync";
 
@@ -35,6 +35,23 @@ export async function POST(req: NextRequest) {
       ? Math.floor(body.daysBack)
       : 7;
 
+  // Resolve which Whoop user this stay should pull from. Three cases:
+  //   1) consent row exists for this stay AND has whoop_user_id → use it.
+  //   2) consent row exists but no whoop_user_id (legacy / pre-column row) →
+  //      pick the most-recently-connected unrevoked Whoop user and link it.
+  //   3) no consent row at all (OAuth went through /auth/whoop/start without
+  //      a stayId cookie) → pick the most-recently-connected unrevoked Whoop
+  //      user, create a consent row for this stay, and link it.
+  // Case 4 — no Whoop connection anywhere — is the only error.
+  const [stay] = await db
+    .select()
+    .from(stays)
+    .where(eq(stays.id, stayId))
+    .limit(1);
+  if (!stay) {
+    return NextResponse.json({ error: "stay_not_found" }, { status: 404 });
+  }
+
   const [consent] = await db
     .select()
     .from(consentRecords)
@@ -48,21 +65,51 @@ export async function POST(req: NextRequest) {
     .orderBy(desc(consentRecords.connectedAt))
     .limit(1);
 
-  if (!consent?.whoopUserId) {
-    return NextResponse.json(
-      {
-        error: "no_whoop_connection",
-        message:
-          "No active Whoop consent for this stay. Connect Whoop on the guest form first.",
-      },
-      { status: 400 },
-    );
+  let whoopUserId: number | null = consent?.whoopUserId ?? null;
+
+  if (!whoopUserId) {
+    const [latestConn] = await db
+      .select({ whoopUserId: whoopConnections.whoopUserId })
+      .from(whoopConnections)
+      .where(isNull(whoopConnections.revokedAt))
+      .orderBy(desc(whoopConnections.connectedAt))
+      .limit(1);
+
+    if (!latestConn) {
+      return NextResponse.json(
+        {
+          error: "no_whoop_connection",
+          message:
+            "No Whoop connection found. Connect Whoop on the guest form first.",
+        },
+        { status: 400 },
+      );
+    }
+
+    whoopUserId = latestConn.whoopUserId;
+
+    if (consent) {
+      // Backfill the missing whoop_user_id on the existing consent row.
+      await db
+        .update(consentRecords)
+        .set({ whoopUserId })
+        .where(eq(consentRecords.id, consent.id));
+    } else {
+      // No consent row at all — create one so future reads bypass this path.
+      await db.insert(consentRecords).values({
+        stayId,
+        source: "whoop",
+        autoDisconnectAt: stay.checkOut,
+        whoopUserId,
+        notes: "Auto-linked via /api/whoop/refresh-snapshot",
+      });
+    }
   }
 
   const [connection] = await db
     .select()
     .from(whoopConnections)
-    .where(eq(whoopConnections.whoopUserId, consent.whoopUserId))
+    .where(eq(whoopConnections.whoopUserId, whoopUserId))
     .limit(1);
 
   if (!connection || connection.revokedAt) {
@@ -106,12 +153,12 @@ export async function POST(req: NextRequest) {
   const [post] = await db
     .select({ lastSyncedAt: whoopConnections.lastSyncedAt })
     .from(whoopConnections)
-    .where(eq(whoopConnections.whoopUserId, consent.whoopUserId))
+    .where(eq(whoopConnections.whoopUserId, whoopUserId))
     .limit(1);
 
   return NextResponse.json({
     ok: true,
-    whoopUserId: consent.whoopUserId,
+    whoopUserId,
     daysBack,
     lastSyncedAt: post?.lastSyncedAt?.toISOString() ?? null,
   });

@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -85,6 +85,14 @@ export default async function ControlPage({
   };
 
   // Whoop link state for the "Refresh Whoop signal" step.
+  // Treat the stay as connected if EITHER:
+  //   (a) the consent row already carries a whoop_user_id (post-callback),
+  //   (b) the consent row exists but predates the column (notes-only),
+  //   (c) there's any active whoop_connections row at all (the OAuth flow
+  //       went through but didn't carry the per-stay cookie).
+  // The /api/whoop/refresh-snapshot route auto-links these on first run, so
+  // the demo never gets stuck with "Connect Whoop on the guest form first"
+  // when the user has clearly already connected.
   const [whoopConsent] = await db
     .select()
     .from(consentRecords)
@@ -98,19 +106,31 @@ export default async function ControlPage({
     .orderBy(desc(consentRecords.connectedAt))
     .limit(1);
 
-  let whoopLastSyncedAt: string | null = null;
-  if (whoopConsent?.whoopUserId) {
-    const [conn] = await db
-      .select({ lastSyncedAt: whoopConnections.lastSyncedAt })
-      .from(whoopConnections)
-      .where(eq(whoopConnections.whoopUserId, whoopConsent.whoopUserId))
-      .limit(1);
-    whoopLastSyncedAt = conn?.lastSyncedAt?.toISOString() ?? null;
-  }
+  const [activeConnection] = await db
+    .select({
+      whoopUserId: whoopConnections.whoopUserId,
+      lastSyncedAt: whoopConnections.lastSyncedAt,
+    })
+    .from(whoopConnections)
+    .where(isNull(whoopConnections.revokedAt))
+    .orderBy(desc(whoopConnections.connectedAt))
+    .limit(1);
+
+  const linkedConnection = whoopConsent?.whoopUserId
+    ? await db
+        .select({ lastSyncedAt: whoopConnections.lastSyncedAt })
+        .from(whoopConnections)
+        .where(eq(whoopConnections.whoopUserId, whoopConsent.whoopUserId))
+        .limit(1)
+        .then((r) => r[0])
+    : undefined;
 
   const whoop = {
-    connected: Boolean(whoopConsent?.whoopUserId),
-    lastSyncedAt: whoopLastSyncedAt,
+    connected: Boolean(whoopConsent || activeConnection),
+    lastSyncedAt:
+      linkedConnection?.lastSyncedAt?.toISOString() ??
+      activeConnection?.lastSyncedAt?.toISOString() ??
+      null,
   };
 
   return (
