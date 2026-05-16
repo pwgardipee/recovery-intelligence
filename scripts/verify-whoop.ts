@@ -3,9 +3,9 @@ config({ path: ".env.local" });
 
 import { createHmac } from "node:crypto";
 
-import { encryptToken, decryptToken } from "../lib/whoop/crypto.ts";
-import { verifySignature } from "../lib/whoop/webhook.ts";
-import { buildAuthorizeUrl } from "../lib/whoop/oauth.ts";
+import { encryptToken, decryptToken } from "../lib/whoop/crypto";
+import { verifySignature } from "../lib/whoop/webhook";
+import { buildAuthorizeUrl } from "../lib/whoop/oauth";
 
 let pass = 0;
 let fail = 0;
