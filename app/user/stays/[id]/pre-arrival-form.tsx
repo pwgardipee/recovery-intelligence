@@ -52,6 +52,7 @@ export function PreArrivalForm({
   propertyName,
   agentId,
   alreadySubmitted,
+  initialConnectedSource = null,
 }: {
   stayId: number;
   guestName: string;
@@ -59,10 +60,13 @@ export function PreArrivalForm({
   propertyName: string;
   agentId: string | null;
   alreadySubmitted: boolean;
+  initialConnectedSource?: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [connectedSource, setConnectedSource] = useState<string | null>(null);
+  const [connectedSource, setConnectedSource] = useState<string | null>(
+    initialConnectedSource,
+  );
   const [submitted, setSubmitted] = useState(alreadySubmitted);
   const [talkOpen, setTalkOpen] = useState(false);
 

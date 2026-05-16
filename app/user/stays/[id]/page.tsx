@@ -1,9 +1,10 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { db } from "@/lib/db";
 import {
+  consentRecords,
   guests,
   intakeAnswers,
   messages,
@@ -41,6 +42,22 @@ export default async function UserStayPage({
     .where(eq(intakeAnswers.stayId, stayId))
     .orderBy(asc(intakeAnswers.id))
     .limit(1);
+
+  // Most recent active consent for this stay (e.g. "whoop"). Used to seed
+  // the pre-arrival form so the source pill shows "Connected" after OAuth.
+  const [activeConsent] = await db
+    .select()
+    .from(consentRecords)
+    .where(
+      and(
+        eq(consentRecords.stayId, stayId),
+        eq(consentRecords.active, true),
+      ),
+    )
+    .orderBy(desc(consentRecords.connectedAt))
+    .limit(1);
+
+  const initialConnectedSource = activeConsent?.source ?? null;
 
   // Guest SMS thread is shown once the stay is "live" (intake done + scene >= 6).
   const showPhoneView = intake && row.stay.demoScene >= 5;
@@ -127,6 +144,7 @@ export default async function UserStayPage({
           propertyName={row.property.name}
           agentId={agentId}
           alreadySubmitted={Boolean(intake)}
+          initialConnectedSource={initialConnectedSource}
         />
 
         <footer className="mt-16 flex items-center justify-between border-t border-line-soft pt-6 text-[11px] tracking-wide text-ink-muted">
