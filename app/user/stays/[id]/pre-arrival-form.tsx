@@ -95,31 +95,97 @@ export function PreArrivalForm({
   }
 
   // -------------------------------------------------------------------------
-  // Live auto-fill — driven by the control panel via BroadcastChannel. The
-  // presenter clicks "Fill form live" on /control and the form on this tab
-  // animates each field empty → filled, then auto-submits. The demo's
-  // theatrical "Rose typing the answers for you" moment.
+  // Live auto-fill — driven by the control panel. Two delivery paths:
+  //   a) BroadcastChannel for any tab already mounted (instant, no I/O)
+  //   b) localStorage signal for tabs that mount AFTER the click, or that
+  //      are refreshing because the demo was just reset
+  //
+  // Three corner cases this handles:
+  //   • Demo was reset on /control while this tab was open → server-side
+  //     intake row is gone but local React state still has submitted=true.
+  //     We sync `submitted` to the prop below so a router.refresh() in this
+  //     tab snaps the form back to the "ready to fill" state.
+  //   • Click-then-open: presenter clicks "Fill form live" before the
+  //     guest tab is open. The localStorage signal sits there with a 60s
+  //     freshness window; the form picks it up the moment it mounts.
+  //   • Click-while-submitted: the listener calls router.refresh() so the
+  //     server reads the latest intake row and re-prop'd `alreadySubmitted`
+  //     can flip to false; the still-fresh localStorage signal then fires
+  //     on the next mount.
   // -------------------------------------------------------------------------
 
   const fillingRef = useRef(false);
 
+  // Keep local "submitted" in sync with the server-side prop so a reset on
+  // the control panel (which deletes intake rows) actually un-locks the form.
+  useEffect(() => {
+    setSubmitted(alreadySubmitted);
+  }, [alreadySubmitted]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (typeof BroadcastChannel === "undefined") return;
-    const channel = new BroadcastChannel(`rose-form-${stayId}`);
-    channel.onmessage = async (event: MessageEvent) => {
-      const msg = event.data as { type: string; payload?: FillPayload };
-      if (msg.type === "fill" && !fillingRef.current && !submitted) {
-        fillingRef.current = true;
-        try {
-          await autoFill(msg.payload ?? defaultFill);
-        } finally {
-          fillingRef.current = false;
-        }
+    const key = `rose-form-${stayId}`;
+
+    const consume = (raw: string | null) => {
+      if (!raw) return;
+      let sig: { type?: string; at?: number; payload?: FillPayload };
+      try {
+        sig = JSON.parse(raw);
+      } catch {
+        return;
       }
+      if (sig.type !== "fill" || typeof sig.at !== "number") return;
+      // 60s freshness window — drop stale signals from earlier sessions.
+      if (Date.now() - sig.at > 60_000) {
+        try {
+          localStorage.removeItem(key);
+        } catch {}
+        return;
+      }
+      if (fillingRef.current) return;
+
+      // If the form is showing the "Received with thanks" state, the server
+      // may already disagree (post-reset). Refresh so the latest server data
+      // re-renders us; we deliberately leave the signal in localStorage so
+      // the next mount picks it up.
+      if (submitted) {
+        router.refresh();
+        return;
+      }
+
+      fillingRef.current = true;
+      try {
+        localStorage.removeItem(key);
+      } catch {}
+      autoFill(sig.payload ?? defaultFill).finally(() => {
+        fillingRef.current = false;
+      });
     };
-    return () => channel.close();
-  }, [stayId, submitted]);
+
+    // 1) Pick up any signal that was waiting for us when we mounted.
+    try {
+      consume(localStorage.getItem(key));
+    } catch {}
+
+    // 2) Listen for signals stored by other tabs on this origin.
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== key) return;
+      consume(e.newValue);
+    };
+    window.addEventListener("storage", onStorage);
+
+    // 3) Instant in-session delivery for already-open tabs.
+    let channel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== "undefined") {
+      channel = new BroadcastChannel(key);
+      channel.onmessage = (ev) => consume(JSON.stringify(ev.data));
+    }
+
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      channel?.close();
+    };
+  }, [stayId, submitted, router]);
 
   async function autoFill(p: FillPayload) {
     // Scroll user to top so they see the form as it fills.

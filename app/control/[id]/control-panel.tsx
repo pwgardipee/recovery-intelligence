@@ -97,15 +97,39 @@ export function ControlPanel({
     });
   }
 
+  // Use a stable window name so re-clicking focuses the existing tab instead
+  // of opening yet another one. Both buttons below share this name.
+  const guestWindowName = `rose-guest-form-${stayId}`;
+
   function openGuestForm() {
-    window.open(`/user/stays/${stayId}`, "_blank", "noopener,noreferrer");
+    window.open(`/user/stays/${stayId}`, guestWindowName);
   }
 
   function fillFormLive() {
-    if (typeof BroadcastChannel === "undefined") return;
-    const channel = new BroadcastChannel(`rose-form-${stayId}`);
-    channel.postMessage({ type: "fill" });
-    channel.close();
+    const signal = { type: "fill", at: Date.now() };
+    const key = `rose-form-${stayId}`;
+
+    // 1) Persist the signal so a tab that mounts AFTER the click (or is
+    //    refreshing post-reset) can still pick it up. The receiver checks
+    //    localStorage on mount and clears the key once consumed.
+    try {
+      localStorage.setItem(key, JSON.stringify(signal));
+    } catch {
+      // private browsing / quota — fall through, BroadcastChannel still works
+    }
+
+    // 2) Instant delivery to any already-open listener.
+    if (typeof BroadcastChannel !== "undefined") {
+      const channel = new BroadcastChannel(key);
+      channel.postMessage(signal);
+      channel.close();
+    }
+
+    // 3) Open the guest view if it isn't already open; if it is, this focuses
+    //    the existing tab. Either way the receiver will run the fill —
+    //    immediately if already mounted, or on next mount via the
+    //    localStorage signal.
+    window.open(`/user/stays/${stayId}`, guestWindowName);
   }
 
   return (
