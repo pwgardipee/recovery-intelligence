@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { asc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
@@ -48,7 +48,7 @@ export async function GET(
     .select()
     .from(intakeAnswers)
     .where(eq(intakeAnswers.stayId, stayId))
-    .orderBy(asc(intakeAnswers.id))
+    .orderBy(desc(intakeAnswers.id))
     .limit(1);
 
   const memory = await db

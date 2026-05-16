@@ -162,7 +162,7 @@ Rules:
 
 export async function interpretIntake(transcript: string): Promise<IntakeAnswers> {
   if (!isAnthropicConfigured()) {
-    return fallbackIntake();
+    return fallbackIntake(transcript);
   }
 
   const response = await anthropic.messages.create({
@@ -172,7 +172,7 @@ export async function interpretIntake(transcript: string): Promise<IntakeAnswers
     messages: [{ role: "user", content: `Guest reply:\n\n${transcript}` }],
   });
 
-  return parseJson<IntakeAnswers>(response, fallbackIntake());
+  return parseJson<IntakeAnswers>(response, fallbackIntake(transcript));
 }
 
 // ---------------------------------------------------------------------------
@@ -459,97 +459,187 @@ function parseJson<T>(
   }
 }
 
-function fallbackIntake(): IntakeAnswers {
+function fallbackIntake(transcript?: string): IntakeAnswers {
+  // Without Claude, we can't produce structured fields, but we can at least
+  // try a tiny amount of keyword extraction so what the guest actually said
+  // (e.g. "chocolate cake") doesn't disappear from foodPreferences.
+  const guestLines = (transcript ?? "")
+    .split(/\n+/)
+    .filter((l) => !/^rose:/i.test(l) && !/^[\s_]*$/.test(l));
+  const guestText = guestLines
+    .map((l) => l.replace(/^[A-Za-z]+:\s*/, "").trim())
+    .filter(Boolean)
+    .join(" ");
+
+  const FOOD_KEYWORDS = [
+    "chocolate cake",
+    "champagne",
+    "tea",
+    "coffee",
+    "wine",
+    "bread",
+    "fruit",
+    "cheese",
+    "vegan",
+    "vegetarian",
+    "gluten-free",
+    "dairy-free",
+    "salad",
+    "soup",
+    "smoothie",
+    "snack",
+    "protein",
+    "electrolytes",
+    "water",
+    "ice",
+  ];
+  const detectedFoods = FOOD_KEYWORDS.filter((k) =>
+    guestText.toLowerCase().includes(k),
+  );
+
+  const foodPreferences =
+    detectedFoods.length > 0
+      ? detectedFoods
+      : ["light vegetarian", "herbal tea"];
+
+  // Synthesize a one-line summary from the guest's first substantive lines
+  // so the Overview shows something authentic even without Claude.
+  const synthesizedSummary = guestText
+    ? `Guest reply (verbatim, no AI interpretation): "${truncate(guestText, 240)}"`
+    : "Arriving solo for a slow first evening; lavender-scented room, late breakfast, no early morning calls.";
+
   return {
     arrivalVibe: "restorative",
     pacing: "slow",
     avoid: ["loud music", "early morning calls"],
-    foodPreferences: ["light vegetarian", "herbal tea"],
-    scent: "lavender (from Crillon)",
+    foodPreferences,
+    scent: "lavender",
     contactPreference: "sms",
     wakeWindow: "8:30–10:00",
     eveningWindow: "after 6pm",
-    occasion: "board dinner Friday; anniversary Saturday",
-    comfortFlags: ["softer_pacing", "quiet_first_night", "late_breakfast", "cycle_comfort"],
-    experiencesRequested: [
-      "Asaya recovery treatment",
-      "Oak grove garden walk",
-      "Wine tasting (move to Saturday)",
-    ],
-    flight: {
-      number: "AA 8",
-      origin: "JFK",
-      destination: "SFO",
-      arrivalTime: "Thu 7:42am PT",
-      notes: "Red-eye; 5h 23m flight, on time",
-    },
-    companion: {
-      name: "Alex",
-      relationship: "partner",
-      note: "joining Saturday — anniversary",
-    },
-    summary: "Arriving solo from a red-eye for a board dinner Friday; her partner Alex joins Saturday for their anniversary. Slow first evening, softer rhythm before Friday, then a celebratory Saturday.",
+    occasion: null,
+    comfortFlags: ["softer_pacing", "quiet_first_night"],
+    experiencesRequested: [],
+    flight: null,
+    companion: null,
+    summary: synthesizedSummary,
   };
+}
+
+function truncate(s: string, max: number): string {
+  return s.length <= max ? s : `${s.slice(0, max - 1).trimEnd()}…`;
 }
 
 function fallbackBrief(input: BriefInput): ArrivalBrief {
   const propertyName = input.property.name;
-  const hasCycleComfort = input.intake.comfortFlags.includes("cycle_comfort");
+  const intake = input.intake;
+  const hasCycleComfort = intake.comfortFlags?.includes("cycle_comfort") ?? false;
+  const foods = (intake.foodPreferences ?? []).filter(
+    (f): f is string => typeof f === "string" && f.trim().length > 0,
+  );
+  const experiences = (intake.experiencesRequested ?? []).filter(
+    (e): e is string => typeof e === "string" && e.trim().length > 0,
+  );
+  const guestName = input.guest.name.split(" ")[0];
+
+  // Lead line: prefer the AI-extracted summary (which captures whatever the
+  // guest said most recently — including post-call additions like "I want
+  // chocolate cake"). Fall back to the canned line only if no summary
+  // was produced.
+  const guestState =
+    intake.summary && intake.summary.trim().length > 0
+      ? intake.summary
+      : `Arriving for a quiet, restorative first day — receive ${guestName} softly.`;
+
+  // Fold the guest's stated food preferences into amenities so even in
+  // fallback mode the brief reflects what they asked for.
+  const baseAmenities = [
+    `${propertyName}'s valley honey & chamomile`,
+    "Magnesium tea service at turndown",
+    "Eucalyptus shower bundle",
+    "Heated mattress pad — pre-warmed",
+  ];
+  const foodAmenities = foods
+    .slice(0, 3)
+    .map((f) => `${capitalizeFirst(f)} ready in-room (per the guest's request)`);
+
+  const firstOfferLine =
+    foods.length > 0
+      ? `Welcome back. We have ${joinList(foods)} ready in your room — let us know if you'd like anything else with it.`
+      : "Welcome back. We held a quiet table at the garden, or we can send something light to your room — whichever helps.";
+
+  const experiencesToPrep =
+    experiences.length > 0
+      ? experiences.slice(0, 4).map((e) => ({
+          experience: e,
+          when: "during the stay",
+          prepNote: "team to coordinate timing per the intake.",
+        }))
+      : [
+          {
+            experience: "Asaya recovery treatment",
+            when: "Friday afternoon, 4pm",
+            prepNote: "Book the quiet room; therapist has her file from prior stays.",
+          },
+          {
+            experience: "Oak grove walk (15-min loop)",
+            when: "Friday late morning",
+            prepNote: "Grounds team: check the bend path is clear.",
+          },
+        ];
+
+  const staffDo = [
+    "Keep check-in concise — no amenity tour tonight",
+    "Offer the room option first, dining as a soft alternate",
+    "Draw the blinds and dim the room before key-card hand-off",
+  ];
+  if (foods.length > 0) {
+    staffDo.push(`Have ${joinList(foods)} ready in-room before arrival`);
+  }
+
   return {
-    guestState: `Arriving from a red-eye and wants to feel human again before Friday — receive her softly.`,
+    guestState,
     serviceMode: "low_touch",
-    flight: input.intake.flight,
+    flight: intake.flight,
     roomPrep: {
       temperatureF: hasCycleComfort ? 69 : 67,
       lighting: "warm low, blackout drawn",
-      scent: input.intake.scent ?? "lavender bundle on nightstand",
-      amenities: [
-        `${propertyName}'s valley honey & chamomile`,
-        "Magnesium tea service at turndown",
-        "Eucalyptus shower bundle",
-        "Heated mattress pad — pre-warmed",
-      ],
+      scent: intake.scent ?? "lavender bundle on nightstand",
+      amenities: [...baseAmenities, ...foodAmenities],
       soundtrack: "soft acoustic, low volume",
       avoidInRoom: ["champagne welcome", "loud floral spray"],
     },
     firstOffer: {
-      line: "Welcome back. We held a quiet table at the garden, or we can send something light to your room — whichever helps.",
+      line: firstOfferLine,
       options: ["Garden table, 7pm", "Light room service, any time"],
     },
-    experiencesToPrep: [
-      {
-        experience: "Asaya recovery treatment",
-        when: "Friday afternoon, 4pm",
-        prepNote: "Book the quiet room; therapist Eun has her file from Crillon.",
-      },
-      {
-        experience: "Oak grove walk (15-min loop)",
-        when: "Friday late morning",
-        prepNote: "Grounds team: check the bend path is clear; she mentioned overgrowth at her last stay.",
-      },
-      {
-        experience: "Wine tasting",
-        when: "Moved to Saturday evening (per guest)",
-        prepNote: "Notify sommelier Inez; not Thursday.",
-      },
-    ],
-    staffDo: [
-      "Keep check-in concise — no amenity tour tonight",
-      "Offer the room option first, dining as a soft alternate",
-      "Draw the blinds and dim the room before key-card hand-off",
-      "Hold the morning newspaper unless she asks",
-    ],
+    experiencesToPrep,
+    staffDo,
     staffDoNot: [
       "Do not push the spa or wine tasting tonight",
       "Do not mention sleep, recovery, or any wellness terminology",
       "Do not schedule an early breakfast",
     ],
     comfortLine: hasCycleComfort
-      ? "Comfort mode requested: warmer room (69°F), heated mattress pad pre-warmed, no harsh morning movement Thursday or Friday. No further detail beyond this line."
+      ? "Comfort mode requested: warmer room, gentler pacing today. No further detail beyond this line."
       : null,
-    delightMomentIdea: "A small note in her handwriting-style font: 'A slower morning is held for you.'",
-    senseOfPlaceLine: `${propertyName} as restoration: the oak grove walk and the still water of the garden, on her pace.`,
+    delightMomentIdea:
+      intake.occasion && intake.occasion.toLowerCase().includes("anniversary")
+        ? "A small handwritten note from the team — quiet, no announcement."
+        : null,
+    senseOfPlaceLine: `${propertyName} as restoration: the property's signature walk and still water, on the guest's pace.`,
   };
+}
+
+function capitalizeFirst(s: string): string {
+  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
+}
+
+function joinList(items: string[]): string {
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
 }
 
 function fallbackDaily(input: DailyInput): DailyRhythm {

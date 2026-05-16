@@ -363,11 +363,16 @@ async function runScene3PreArrivalCall(stayId: number): Promise<void> {
 
 async function runScene4ArrivalBrief(stayId: number): Promise<void> {
   const { stay, guest, property } = await fullContext(stayId);
+  // Read the NEWEST intake row, not the oldest. Each path that captures
+  // intake (email form submit → in_app_chat row, pre-arrival call →
+  // pre_call row) inserts a fresh row with the combined transcript so
+  // far. The most recent row is the most comprehensive snapshot of what
+  // we know — including anything the guest just said on a call.
   const [intake] = await db
     .select()
     .from(intakeAnswers)
     .where(eq(intakeAnswers.stayId, stayId))
-    .orderBy(asc(intakeAnswers.id))
+    .orderBy(desc(intakeAnswers.id))
     .limit(1);
 
   const intakeAnswered: Record<string, unknown> | null = intake

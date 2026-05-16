@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
@@ -57,15 +57,36 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "missing relations" }, { status: 500 });
   }
 
-  // Run Claude on the real transcript.
-  const intake = await interpretIntake(body.transcript);
+  // For pre-arrival CALLS, combine the most recent prior intake's transcript
+  // with the new call transcript before re-interpreting. Otherwise a sparse
+  // call ("I just want chocolate cake") would produce a sparse intake that
+  // drops the email's flight, comfort flags, etc., and the brief would
+  // forget context the guest already gave us.
+  // For form submissions ("in_app_chat") we treat the form as the canonical
+  // baseline and don't combine.
+  const isCall = (body.source ?? "pre_call") === "pre_call";
+  let transcriptForInterpret = body.transcript;
+  if (isCall) {
+    const [priorIntake] = await db
+      .select()
+      .from(intakeAnswers)
+      .where(eq(intakeAnswers.stayId, body.stayId))
+      .orderBy(desc(intakeAnswers.id))
+      .limit(1);
+    if (priorIntake?.transcript) {
+      transcriptForInterpret = `${priorIntake.transcript}\n\n---\n\nFollow-up call transcript (just now — newer preferences here override the above):\n\n${body.transcript}`;
+    }
+  }
 
-  // Save the intake row.
+  const intake = await interpretIntake(transcriptForInterpret);
+
+  // Save the intake row using the combined transcript so the next call can
+  // build on top of it (and so the History tab shows the full context).
   await db.insert(intakeAnswers).values({
     stayId: body.stayId,
     source: body.source ?? "pre_call",
     answers: intake,
-    transcript: body.transcript,
+    transcript: transcriptForInterpret,
   });
 
   // Parse the transcript into structured turns for the call card.
