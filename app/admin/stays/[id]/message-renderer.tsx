@@ -21,8 +21,23 @@ export interface RenderedMessage {
 // Staff thread
 // ---------------------------------------------------------------------------
 
-export function StaffThread({ messages }: { messages: RenderedMessage[] }) {
-  const scrollRef = useAutoScroll(messages.length);
+export function StaffThread({
+  messages,
+  newestFirst = false,
+}: {
+  messages: RenderedMessage[];
+  /**
+   * When true, reverse the message order (newest at the top) and skip the
+   * auto-scroll-to-bottom — used on the History tab so the most recent
+   * activity is immediately visible.
+   */
+  newestFirst?: boolean;
+}) {
+  // Skip auto-scroll when rendering newest-first, otherwise the view would
+  // jump to the oldest message which is the opposite of what the operator
+  // wants.
+  const scrollRef = useAutoScroll(newestFirst ? 0 : messages.length);
+  const ordered = newestFirst ? [...messages].reverse() : messages;
   return (
     <div className="flex h-full flex-col">
       <ThreadHeader
@@ -34,12 +49,12 @@ export function StaffThread({ messages }: { messages: RenderedMessage[] }) {
         ref={scrollRef}
         className="rw-scroll flex-1 space-y-6 overflow-y-auto px-6 py-8"
       >
-        {messages.length === 0 ? (
+        {ordered.length === 0 ? (
           <EmptyHint
             line="Quiet for now. Advance the demo to bring the first beat in."
           />
         ) : (
-          messages.map((m, i) => (
+          ordered.map((m, i) => (
             <StaffMessage key={m.id} message={m} index={i} />
           ))
         )}

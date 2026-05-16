@@ -618,6 +618,15 @@ function HistoryTab({
 
   return (
     <div className="space-y-10">
+      <Section title="Concierge thread">
+        <p className="mb-4 text-[12px] text-ink-muted">
+          The full AI / staff conversation, newest at the top.
+        </p>
+        <div className="-mx-6">
+          <StaffThread messages={staffMessages} newestFirst />
+        </div>
+      </Section>
+
       <Section title="Event timeline">
         {events.length === 0 ? (
           <EmptyLine text="No events recorded yet." />
@@ -648,15 +657,6 @@ function HistoryTab({
             ))}
           </ol>
         )}
-      </Section>
-
-      <Section title="Concierge thread">
-        <p className="mb-4 text-[12px] text-ink-muted">
-          The full AI / staff conversation, scene by scene.
-        </p>
-        <div className="-mx-6">
-          <StaffThread messages={staffMessages} />
-        </div>
       </Section>
     </div>
   );
