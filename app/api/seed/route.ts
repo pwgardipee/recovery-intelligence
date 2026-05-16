@@ -120,23 +120,41 @@ export async function POST() {
 
   // ---- Guest -------------------------------------------------------------
 
-  await db
-    .insert(guests)
-    .values({
-      name: "Maya Chen",
-      email: "maya@maya-ventures.com",
-      phone: "+1 415 555 0182",
-      photoUrl: null,
-      contactPreference: "sms",
-      mergedProfileCount: 3,
-    })
-    .onConflictDoNothing();
+  // The phone number drives the live ElevenLabs demo call, so we want
+  // re-running the seed to actually refresh it on an existing Maya row
+  // (rw_guests.email is not unique, so onConflictDoNothing was effectively
+  // a one-shot insert — keeping stale state forever).
+  const mayaSeed = {
+    name: "Maya Chen",
+    email: "maya@maya-ventures.com",
+    phone: "+12626857807",
+    photoUrl: null,
+    contactPreference: "sms",
+    mergedProfileCount: 3,
+  };
 
   let [maya] = await db
     .select()
     .from(guests)
-    .where(eq(guests.email, "maya@maya-ventures.com"))
+    .where(eq(guests.email, mayaSeed.email))
     .limit(1);
+
+  if (!maya) {
+    const [inserted] = await db.insert(guests).values(mayaSeed).returning();
+    maya = inserted;
+  } else {
+    await db
+      .update(guests)
+      .set({
+        name: mayaSeed.name,
+        phone: mayaSeed.phone,
+        photoUrl: mayaSeed.photoUrl,
+        contactPreference: mayaSeed.contactPreference,
+        mergedProfileCount: mayaSeed.mergedProfileCount,
+      })
+      .where(eq(guests.id, maya.id));
+    maya = { ...maya, ...mayaSeed };
+  }
 
   if (!maya) {
     return NextResponse.json({ error: "guest insert failed" }, { status: 500 });
