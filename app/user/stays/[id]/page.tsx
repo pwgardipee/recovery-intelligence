@@ -77,7 +77,6 @@ export default async function UserStayPage({
     return (
       <main className="flex min-h-screen flex-col bg-ivory">
         <UserNav
-          stayId={stayId}
           propertyName={row.property.name}
           guestName={row.guest.name}
         />
@@ -96,7 +95,6 @@ export default async function UserStayPage({
     <main className="relative min-h-screen overflow-hidden bg-ivory">
       <BackgroundOrnament />
       <UserNav
-        stayId={stayId}
         propertyName={row.property.name}
         guestName={row.guest.name}
       />
@@ -143,11 +141,9 @@ export default async function UserStayPage({
 }
 
 function UserNav({
-  stayId,
   propertyName,
   guestName,
 }: {
-  stayId: number;
   propertyName: string;
   guestName: string;
 }) {
@@ -155,7 +151,7 @@ function UserNav({
     <header className="relative z-10 border-b border-line-soft bg-paper/70 backdrop-blur">
       <div className="mx-auto flex max-w-2xl items-center justify-between px-6 py-3 sm:px-10">
         <Link
-          href={`/control/${stayId}`}
+          href="/"
           className="rw-monogram text-[12px] tracking-[0.32em] text-forest"
         >
           ROSEWOOD · {propertyName.replace("Rosewood ", "").toUpperCase()}

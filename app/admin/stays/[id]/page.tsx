@@ -102,12 +102,6 @@ export default async function AdminStayPage({
               />
             )}
             <MemoryChip count={memory.length} />
-            <Link
-              href={`/control/${stayId}`}
-              className="rounded-sm border border-line bg-paper px-3 py-1 text-[10.5px] uppercase tracking-[0.2em] text-ink-soft hover:text-forest"
-            >
-              Open control →
-            </Link>
           </div>
         </div>
       </header>

@@ -5,8 +5,6 @@ import { db } from "@/lib/db";
 import { guests, properties, stays } from "@/lib/db/rhythm-schema";
 import { isAnthropicConfigured } from "@/lib/ai/anthropic";
 
-import { BeginDemoButton } from "./begin-demo-button";
-
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
@@ -70,8 +68,19 @@ export default async function Home() {
           </p>
 
           {/* Primary CTA */}
-          <div className="mt-12">
-            <BeginDemoButton />
+          <div className="mt-12 flex flex-wrap items-center gap-3">
+            <Link
+              href="/admin"
+              className="rounded-sm bg-forest px-6 py-3.5 text-[12px] uppercase tracking-[0.22em] text-cream hover:bg-forest-deep"
+            >
+              Open admin dashboard →
+            </Link>
+            <Link
+              href="/control"
+              className="rounded-sm border border-line bg-paper px-5 py-3.5 text-[12px] uppercase tracking-[0.22em] text-ink-soft hover:border-gold hover:text-forest"
+            >
+              Demo control room
+            </Link>
           </div>
         </section>
 
@@ -100,9 +109,14 @@ export default async function Home() {
             Existing stays
           </p>
           <p className="mt-1.5 text-[12px] text-ink-muted">
-            Each row opens directly into the concierge thread (the demo
-            surface). Use <em className="not-italic font-medium">Begin the demo</em> above to
-            reset state mid-rehearsal.
+            Each row opens directly into the concierge or guest thread. Use the{" "}
+            <Link
+              href="/control"
+              className="font-medium not-italic underline-offset-4 hover:text-ink"
+            >
+              control room
+            </Link>{" "}
+            to drive the live demo.
           </p>
 
           {rows.length === 0 ? (
@@ -218,12 +232,6 @@ function StayRow({
           className="rounded-sm border border-line bg-paper px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-ink-soft hover:text-forest"
         >
           Staff view
-        </Link>
-        <Link
-          href={`/control/${stayId}`}
-          className="rounded-sm bg-forest px-4 py-1.5 text-[11px] uppercase tracking-[0.18em] text-cream hover:bg-forest-deep"
-        >
-          Open remote →
         </Link>
       </div>
     </div>
