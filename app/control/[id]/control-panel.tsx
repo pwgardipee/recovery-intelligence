@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { RoseCallButton } from "./rose-call-button";
+import { PhoneCallButton } from "./phone-call-button";
 
 export function ControlPanel({
   stayId,
@@ -11,6 +12,7 @@ export function ControlPanel({
   totalScenes,
   sceneTitles,
   agentId,
+  phoneAvailable,
   guestName,
   guestPhone,
   aiReady,
@@ -20,6 +22,7 @@ export function ControlPanel({
   totalScenes: number;
   sceneTitles: string[];
   agentId: string | null;
+  phoneAvailable: boolean;
   guestName: string;
   guestPhone: string;
   aiReady: boolean;
@@ -58,6 +61,11 @@ export function ControlPanel({
           ok={Boolean(agentId)}
           on="Rose voice agent connected"
           off="Set NEXT_PUBLIC_ELEVENLABS_AGENT_ID for live voice"
+        />
+        <StatusPill
+          ok={phoneAvailable}
+          on="Real phone calls enabled"
+          off="Add Twilio number to enable real phone calls"
         />
       </div>
 
@@ -114,6 +122,12 @@ export function ControlPanel({
         </p>
 
         <div className="mt-4 space-y-3">
+          <PhoneCallButton
+            stayId={stayId}
+            defaultNumber={guestPhone}
+            available={phoneAvailable}
+            onCallComplete={() => router.refresh()}
+          />
           <RoseCallButton
             stayId={stayId}
             agentId={agentId}

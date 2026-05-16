@@ -31,6 +31,11 @@ export default async function ControlPage({
   if (!row) return notFound();
 
   const agentId = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID || null;
+  const phoneAvailable = Boolean(
+    process.env.ELEVENLABS_API_KEY &&
+      process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID &&
+      process.env.ELEVENLABS_PHONE_NUMBER_ID,
+  );
   const aiReady = isAnthropicConfigured();
 
   return (
@@ -90,6 +95,7 @@ export default async function ControlPage({
           totalScenes={SCENE_TITLES.length}
           sceneTitles={[...SCENE_TITLES]}
           agentId={agentId}
+          phoneAvailable={phoneAvailable}
           guestName={row.guest.name}
           guestPhone={row.guest.phone}
           aiReady={aiReady}
