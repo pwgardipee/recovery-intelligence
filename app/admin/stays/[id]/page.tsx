@@ -11,10 +11,8 @@ import {
   properties,
   stays,
 } from "@/lib/db/rhythm-schema";
-import { SCENE_TITLES } from "@/lib/rhythm/scenes";
 
-import { GuestThread, StaffThread } from "./message-renderer";
-import { SceneControl } from "./scene-control";
+import { StaffThread } from "./message-renderer";
 
 export const dynamic = "force-dynamic";
 
@@ -46,9 +44,6 @@ export default async function AdminStayPage({
   const staffMessages = allMessages
     .filter((m) => m.thread === "staff")
     .map(serializeMessage);
-  const guestMessages = allMessages
-    .filter((m) => m.thread === "guest")
-    .map(serializeMessage);
 
   const [activeConsent] = await db
     .select()
@@ -64,25 +59,23 @@ export default async function AdminStayPage({
 
   return (
     <main className="flex min-h-screen flex-col bg-ivory">
-      {/* Top bar */}
       <header className="border-b border-line bg-paper/85 backdrop-blur">
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-8 gap-y-3 px-6 py-3">
+        <div className="mx-auto flex max-w-[1100px] flex-wrap items-center gap-x-8 gap-y-3 px-6 py-3">
           <Link
             href="/"
             className="rw-monogram text-[12px] tracking-[0.32em] text-forest"
           >
             ROSEWOOD · ROSE
           </Link>
+          <span className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
+            Concierge group · staff view
+          </span>
 
           <div className="flex items-center gap-3 text-[13px]">
             <span className="text-ink-muted">|</span>
-            <span className="font-medium text-forest">
-              {row.property.name}
-            </span>
+            <span className="font-medium text-forest">{row.property.name}</span>
             <span className="text-ink-muted">·</span>
-            <span className="text-ink-soft">
-              {row.guest.name}
-            </span>
+            <span className="text-ink-soft">{row.guest.name}</span>
             <span className="text-ink-muted">·</span>
             <span className="text-ink-soft">
               {formatRange(row.stay.checkIn, row.stay.checkOut)}
@@ -90,7 +83,10 @@ export default async function AdminStayPage({
             {row.stay.occasion && (
               <>
                 <span className="text-ink-muted">·</span>
-                <span className="rw-tag" style={{ background: "transparent" }}>
+                <span
+                  className="rw-tag"
+                  style={{ background: "transparent" }}
+                >
                   {row.stay.occasion.replace(/_/g, " ")}
                 </span>
               </>
@@ -106,29 +102,18 @@ export default async function AdminStayPage({
               />
             )}
             <MemoryChip count={memory.length} />
+            <Link
+              href={`/control/${stayId}`}
+              className="rounded-sm border border-line bg-paper px-3 py-1 text-[10.5px] uppercase tracking-[0.2em] text-ink-soft hover:text-forest"
+            >
+              Open control →
+            </Link>
           </div>
         </div>
-
-        <SceneControl
-          stayId={stayId}
-          currentScene={row.stay.demoScene}
-          totalScenes={SCENE_TITLES.length}
-          currentTitle={SCENE_TITLES[row.stay.demoScene]}
-        />
       </header>
 
-      {/* Threads */}
-      <section className="mx-auto grid w-full max-w-[1600px] flex-1 grid-cols-1 gap-0 lg:grid-cols-[1.4fr_1fr]">
-        <div className="border-r border-line">
-          <StaffThread messages={staffMessages} />
-        </div>
-        <div className="bg-cream/30">
-          <GuestThread
-            messages={guestMessages}
-            guestName={row.guest.name.split(" ")[0]}
-            propertyName={row.property.name}
-          />
-        </div>
+      <section className="mx-auto w-full max-w-[1100px] flex-1">
+        <StaffThread messages={staffMessages} />
       </section>
     </main>
   );

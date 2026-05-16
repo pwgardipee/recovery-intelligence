@@ -27,7 +27,7 @@ export function BeginDemoButton() {
           );
           return;
         }
-        router.push(`/admin/stays/${body.sandHillStayId}`);
+        router.push(`/control/${body.sandHillStayId}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "unknown");
       }
@@ -60,8 +60,9 @@ export function BeginDemoButton() {
         </svg>
       </button>
       <p className="text-[11px] italic text-ink-muted">
-        Seeds Maya, the demo guest, and opens the concierge thread. Safe to
-        re-run between rehearsals.
+        Seeds Maya, the demo guest, and opens the presenter remote — from
+        there you open the concierge + guest screens in separate windows.
+        Safe to re-run between rehearsals.
       </p>
       {error && (
         <p className="rw-enter text-[12px] text-clay">

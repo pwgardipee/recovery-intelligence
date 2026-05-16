@@ -1,12 +1,17 @@
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { after, NextResponse, type NextRequest } from "next/server";
 
 import { db } from "@/lib/db";
 import { whoopConnections } from "@/lib/db/schema";
 import {
+  consentRecords,
+  messages,
+  signals,
+  stays,
+} from "@/lib/db/rhythm-schema";
+import {
   WHOOP_API_BASE,
   WHOOP_OAUTH_STATE_COOKIE,
-  whoopConfig,
 } from "@/lib/whoop/config";
 import { encryptToken } from "@/lib/whoop/crypto";
 import {
@@ -144,8 +149,107 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const redirectUrl = new URL("/auth/whoop/connected", request.url);
+  // If the start route stamped a stayId cookie, treat this as the guest
+  // connecting their Whoop from the pre-arrival form for that specific stay.
+  // Post the consent record + signal seeds + a "Whoop connected" line into
+  // the staff thread, then bump the demo scene so the rest of the flow
+  // continues from a real authorization.
+  const stayCookie = request.cookies.get("rw_oauth_stay_id")?.value;
+  const stayId = stayCookie ? Number(stayCookie) : NaN;
+
+  let redirectUrl = new URL("/auth/whoop/connected", request.url);
+  if (Number.isFinite(stayId)) {
+    try {
+      const [stay] = await db
+        .select()
+        .from(stays)
+        .where(eq(stays.id, stayId))
+        .limit(1);
+      if (stay) {
+        await db.insert(consentRecords).values({
+          stayId,
+          source: "whoop",
+          autoDisconnectAt: stay.checkOut,
+          notes: `Real Whoop OAuth · user_id ${profile.user_id}`,
+        });
+
+        // Seed two demo signal snapshots so downstream prompts have shape.
+        await db.insert(signals).values([
+          {
+            guestId: stay.guestId,
+            source: "whoop",
+            capturedAt: new Date(stay.checkIn.getTime() - 1000 * 60 * 60 * 18),
+            payload: {
+              sleepMinutes: 288,
+              sleepQuality: "fragmented",
+              travelStrain: "high",
+              recoveryBand: "low",
+            },
+          },
+          {
+            guestId: stay.guestId,
+            source: "whoop",
+            capturedAt: new Date(stay.checkIn.getTime() - 1000 * 60 * 60 * 4),
+            payload: {
+              sleepMinutes: 312,
+              travelStrain: "high",
+              recoveryBand: "low",
+            },
+          },
+        ]);
+
+        // Append a consent_strip + Rose line to the staff thread.
+        const [{ next }] = await db
+          .select({
+            next: sql<number>`coalesce(max(${messages.sceneOrder}), 0) + 1`,
+          })
+          .from(messages)
+          .where(
+            and(eq(messages.stayId, stayId), eq(messages.thread, "staff")),
+          );
+        await db.insert(messages).values([
+          {
+            stayId,
+            thread: "staff",
+            author: "rose",
+            authorRole: "ai",
+            kind: "consent_strip",
+            content: {
+              source: "Whoop",
+              connectedAt: new Date().toISOString(),
+              autoDisconnectAt: stay.checkOut.toISOString(),
+              use: "translated into hospitality pacing only — no metrics shared with staff",
+            },
+            approvalStatus: "auto",
+            sceneOrder: next,
+          },
+          {
+            stayId,
+            thread: "staff",
+            author: "rose",
+            authorRole: "ai",
+            kind: "text",
+            content: {
+              line: "Got her signal stream for the trip. She arrived on a short night — I'll fold that into pacing without naming it.",
+            },
+            approvalStatus: "auto",
+            sceneOrder: next + 1,
+          },
+        ]);
+
+        if (stay.demoScene < 2) {
+          await db.update(stays).set({ demoScene: 2 }).where(eq(stays.id, stayId));
+        }
+
+        redirectUrl = new URL(`/user/stays/${stayId}`, request.url);
+      }
+    } catch (err) {
+      console.error("[whoop:callback] stay-side handoff failed", err);
+    }
+  }
+
   const response = NextResponse.redirect(redirectUrl);
   response.cookies.delete(WHOOP_OAUTH_STATE_COOKIE);
+  response.cookies.delete("rw_oauth_stay_id");
   return response;
 }

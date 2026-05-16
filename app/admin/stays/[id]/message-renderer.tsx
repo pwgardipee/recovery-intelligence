@@ -206,17 +206,71 @@ function IntakeCard({
     occasion: string | null;
     summary: string;
     propertyName: string;
+    experiencesRequested?: string[];
+    comfortFlags?: string[];
+    flight?: {
+      number?: string | null;
+      origin?: string | null;
+      destination?: string | null;
+      arrivalTime?: string | null;
+      notes?: string | null;
+    } | null;
+    sourceLabel?: string;
+    originalText?: string;
   };
 }) {
+  const [showOriginal, setShowOriginal] = useState(false);
+  const flight = content.flight;
+  const hasFlight =
+    flight && (flight.number || flight.arrivalTime || flight.origin);
+
   return (
     <div className="rw-card px-5 py-5">
-      <p className="text-[11px] uppercase tracking-[0.22em] text-gold">
-        Pre-arrival read
-      </p>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-[11px] uppercase tracking-[0.22em] text-gold">
+          {content.sourceLabel ?? "Pre-arrival read"}
+        </p>
+        {content.originalText && (
+          <button
+            onClick={() => setShowOriginal(!showOriginal)}
+            className="text-[11px] text-ink-muted underline-offset-4 hover:text-ink"
+          >
+            {showOriginal ? "hide original" : "view original"}
+          </button>
+        )}
+      </div>
+
+      {showOriginal && content.originalText && (
+        <pre className="rw-enter mt-3 max-h-56 overflow-y-auto whitespace-pre-wrap border-l-2 border-line bg-cream/40 px-4 py-3 font-serif text-[13px] leading-6 text-ink-soft">
+          {content.originalText}
+        </pre>
+      )}
+
       <p className="font-serif mt-3 text-[17px] leading-snug text-forest">
         {content.summary}
       </p>
       <div className="rw-rule mt-4" />
+
+      {hasFlight && (
+        <div className="mt-4 rounded-sm border border-line bg-cream/40 px-4 py-3">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
+            Flight
+          </p>
+          <p className="mt-1 font-serif text-[15px] text-forest">
+            {flight?.number}
+            {flight?.origin && flight?.destination
+              ? ` · ${flight.origin} → ${flight.destination}`
+              : ""}
+          </p>
+          {flight?.arrivalTime && (
+            <p className="text-[12px] text-ink-soft">
+              Lands {flight.arrivalTime}
+              {flight.notes ? ` · ${flight.notes}` : ""}
+            </p>
+          )}
+        </div>
+      )}
+
       <dl className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-[12.5px]">
         <Field label="Arrival" value={content.vibe} />
         <Field label="Pacing" value={content.pacing} />
@@ -224,6 +278,22 @@ function IntakeCard({
         <Field label="Scent" value={content.scent ?? "—"} />
         <Field label="Occasion" value={content.occasion ?? "—"} className="col-span-2" />
       </dl>
+
+      {content.experiencesRequested && content.experiencesRequested.length > 0 && (
+        <div className="mt-4">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
+            Experiences requested
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {content.experiencesRequested.map((e) => (
+              <span key={e} className="rw-tag" style={{ background: "var(--rw-gold-soft)" }}>
+                {e}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-4 flex flex-wrap gap-1.5">
         {content.foodPreferences.map((f) => (
           <span key={f} className="rw-tag">{f}</span>
@@ -234,6 +304,13 @@ function IntakeCard({
           </span>
         ))}
       </div>
+
+      {content.comfortFlags && content.comfortFlags.includes("cycle_comfort") && (
+        <p className="mt-4 border-l-2 border-rose pl-3 text-[11.5px] italic text-ink-muted">
+          Comfort mode flagged. Surfaced only as warmer room and gentler
+          pacing — no further detail visible to staff.
+        </p>
+      )}
     </div>
   );
 }
@@ -344,6 +421,39 @@ function ArrivalBriefCard({
         </p>
       </header>
 
+      {b.flight && (b.flight.number || b.flight.arrivalTime) && (
+        <div className="border-b border-line bg-cream/30 px-6 py-3">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] uppercase tracking-[0.22em] text-gold">
+              Flight
+            </span>
+            <span className="font-serif text-[15px] text-forest">
+              {b.flight.number}
+              {b.flight.origin && b.flight.destination
+                ? ` · ${b.flight.origin} → ${b.flight.destination}`
+                : ""}
+            </span>
+            {b.flight.arrivalTime && (
+              <span className="text-[12px] text-ink-soft">
+                lands {b.flight.arrivalTime}
+                {b.flight.notes ? ` · ${b.flight.notes}` : ""}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {b.comfortLine && (
+        <div className="border-b border-line bg-rose/10 px-6 py-3">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-clay">
+            Comfort note
+          </p>
+          <p className="mt-1 font-serif text-[14px] leading-snug text-ink">
+            {b.comfortLine}
+          </p>
+        </div>
+      )}
+
       <div className="rw-stagger grid grid-cols-1 gap-5 px-6 py-5 sm:grid-cols-2">
         <Section title="Room prep">
           <p className="text-[13px] text-ink-soft">
@@ -412,6 +522,31 @@ function ArrivalBriefCard({
             ))}
           </ul>
         </Section>
+
+        {b.experiencesToPrep && b.experiencesToPrep.length > 0 && (
+          <Section title="Experiences to prep" className="sm:col-span-2">
+            <ul className="space-y-2">
+              {b.experiencesToPrep.map((e) => (
+                <li
+                  key={e.experience + e.when}
+                  className="rounded-sm border border-line bg-cream/30 px-3 py-2"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="font-serif text-[14px] text-forest">
+                      {e.experience}
+                    </p>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-ink-muted">
+                      {e.when}
+                    </p>
+                  </div>
+                  <p className="mt-1 text-[12px] italic text-ink-soft">
+                    {e.prepNote}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
 
         {b.delightMomentIdea && (
           <Section title="Optional delight" className="sm:col-span-2">

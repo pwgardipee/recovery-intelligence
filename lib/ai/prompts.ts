@@ -42,6 +42,14 @@ ABSOLUTE RULES — violation breaks the product:
 // Types — these are the structured contracts the UI renders against.
 // ---------------------------------------------------------------------------
 
+export interface FlightInfo {
+  number: string | null;        // e.g., "AA 8"
+  origin: string | null;        // "JFK"
+  destination: string | null;   // "SFO"
+  arrivalTime: string | null;   // "Thu 7:42am PT"
+  notes: string | null;         // "red-eye, light delays expected"
+}
+
 export interface IntakeAnswers {
   arrivalVibe: "restorative" | "social" | "productive" | "celebratory" | "exploratory";
   pacing: "slow" | "balanced" | "full";
@@ -52,13 +60,16 @@ export interface IntakeAnswers {
   wakeWindow: string | null;
   eveningWindow: string | null;
   occasion: string | null;
-  comfortFlags: string[];
+  comfortFlags: string[];           // includes "cycle_comfort" when opted in
+  experiencesRequested: string[];   // e.g., ["asaya recovery", "oak grove walk"]
+  flight: FlightInfo | null;
   summary: string;
 }
 
 export interface ArrivalBrief {
   guestState: string; // one elegant sentence, hospitality language only
   serviceMode: "low_touch" | "balanced" | "warm_attentive";
+  flight: FlightInfo | null;             // pulled forward from intake, shown prominently
   roomPrep: {
     temperatureF: number;
     lighting: string;
@@ -71,10 +82,16 @@ export interface ArrivalBrief {
     line: string; // what the front desk says
     options: string[]; // 1–2 alternates
   };
+  experiencesToPrep: Array<{
+    experience: string;       // "Asaya recovery treatment"
+    when: string;             // "Friday afternoon"
+    prepNote: string;         // "book 4pm, request the quiet room"
+  }>;
   staffDo: string[]; // 3–5 verbs in hospitality language
   staffDoNot: string[]; // 2–4 things to avoid
-  delightMomentIdea: string | null; // optional bespoke gesture
-  senseOfPlaceLine: string; // one line tying this guest's intent to the property
+  comfortLine: string | null;            // one gentle line if comfort flags set
+  delightMomentIdea: string | null;      // optional bespoke gesture
+  senseOfPlaceLine: string;              // one line tying this guest's intent to the property
 }
 
 export interface DailyRhythm {
@@ -116,6 +133,8 @@ Return ONE JSON object with this exact shape (no prose, no markdown fences):
   "eveningWindow": string | null,
   "occasion": string | null,
   "comfortFlags": string[],
+  "experiencesRequested": string[],
+  "flight": { "number": string|null, "origin": string|null, "destination": string|null, "arrivalTime": string|null, "notes": string|null } | null,
   "summary": string
 }
 
@@ -123,8 +142,13 @@ Rules:
 - "summary" is ONE sentence in hospitality language describing how this guest
   is arriving and what they need. Never metrics. Never medical.
 - "comfortFlags" can include: "warmer_room", "softer_pacing", "quiet_first_night",
-  "late_breakfast", "no_morning_calls". NEVER include cycle terms.
-- Be conservative on confidence. If unsure of a field, set it to null or [].
+  "late_breakfast", "no_morning_calls", "cycle_comfort". Never any specific
+  cycle terminology beyond the flag. If cycle_comfort is set, the brief will
+  surface only "warmer room, gentler pacing" — never the underlying detail.
+- "experiencesRequested" — things the guest mentioned wanting (Asaya, walks,
+  dining, golf, wine, etc). Up to 6 items, each as a short phrase.
+- "flight" — if a flight number is given, fill what you can; null otherwise.
+- Be conservative. Unknown fields → null or [].
 `.trim();
 
 export async function interpretIntake(transcript: string): Promise<IntakeAnswers> {
@@ -163,22 +187,27 @@ Return ONE JSON object with this exact shape (no prose, no markdown fences):
 {
   "guestState": string,             // ONE sentence; hospitality language
   "serviceMode": "low_touch" | "balanced" | "warm_attentive",
+  "flight": { "number": string|null, "origin": string|null, "destination": string|null, "arrivalTime": string|null, "notes": string|null } | null,
   "roomPrep": {
-    "temperatureF": number,         // 65–72
-    "lighting": string,             // e.g., "warm low, blackout ready"
-    "scent": string,                // from sense_of_place options when possible
-    "amenities": string[],          // 2–4 items, each anchored to this property
+    "temperatureF": number,         // 65–72 (a degree or two warmer if comfort_flag set)
+    "lighting": string,
+    "scent": string,
+    "amenities": string[],
     "soundtrack": string,
-    "avoidInRoom": string[]         // 1–3 things NOT to do/place
+    "avoidInRoom": string[]
   },
   "firstOffer": {
-    "line": string,                 // what front desk literally says
-    "options": string[]             // 1–2 alternates
+    "line": string,
+    "options": string[]
   },
-  "staffDo": string[],              // 3–5 short directives
-  "staffDoNot": string[],           // 2–4 short prohibitions
+  "experiencesToPrep": [
+    { "experience": string, "when": string, "prepNote": string }
+  ],
+  "staffDo": string[],
+  "staffDoNot": string[],
+  "comfortLine": string | null,
   "delightMomentIdea": string | null,
-  "senseOfPlaceLine": string        // one line tying intent ↔ this property
+  "senseOfPlaceLine": string
 }
 
 Voice rules:
@@ -187,6 +216,13 @@ Voice rules:
 - "staffDoNot" never mentions sensitive data. Say "do not push spa tonight"
   not "do not mention recovery score."
 - "amenities" must reference the property's signature items where natural.
+- "flight" — pull forward from intake unchanged; null if unknown.
+- "experiencesToPrep" — map intake.experiencesRequested into actionable cards
+  with when + prepNote (which department prepares what). Move conflicting
+  experiences to a different day if needed and say so in prepNote.
+- "comfortLine" — if intake.comfortFlags includes "cycle_comfort", emit ONE
+  sentence ONLY: "warmer room, gentler pacing today/tomorrow." NEVER any
+  cycle terminology. Null otherwise. Never expose the underlying flag's name.
 - If occasion is set (e.g., "anniversary"), the delightMomentIdea is real.
 `.trim();
 
@@ -401,29 +437,44 @@ function fallbackIntake(): IntakeAnswers {
     pacing: "slow",
     avoid: ["loud music", "early morning calls"],
     foodPreferences: ["light vegetarian", "herbal tea"],
-    scent: "cedar & wildflower",
+    scent: "lavender (from Crillon)",
     contactPreference: "sms",
     wakeWindow: "8:30–10:00",
     eveningWindow: "after 6pm",
-    occasion: "board meeting Friday",
-    comfortFlags: ["softer_pacing", "quiet_first_night", "late_breakfast"],
-    summary: "Arriving from a long flight; wants a quiet first evening and a slow, restorative pacing before a high-stakes meeting.",
+    occasion: "board dinner Friday",
+    comfortFlags: ["softer_pacing", "quiet_first_night", "late_breakfast", "cycle_comfort"],
+    experiencesRequested: [
+      "Asaya recovery treatment",
+      "Oak grove garden walk",
+      "Wine tasting (move to Saturday)",
+    ],
+    flight: {
+      number: "AA 8",
+      origin: "JFK",
+      destination: "SFO",
+      arrivalTime: "Thu 7:42am PT",
+      notes: "Red-eye; 5h 23m flight, on time",
+    },
+    summary: "Arriving from a red-eye before a board dinner; wants a slow first evening and a softer rhythm to feel human before Friday.",
   };
 }
 
 function fallbackBrief(input: BriefInput): ArrivalBrief {
   const propertyName = input.property.name;
+  const hasCycleComfort = input.intake.comfortFlags.includes("cycle_comfort");
   return {
     guestState: `Arriving from a red-eye and wants to feel human again before Friday — receive her softly.`,
     serviceMode: "low_touch",
+    flight: input.intake.flight,
     roomPrep: {
-      temperatureF: 67,
+      temperatureF: hasCycleComfort ? 69 : 67,
       lighting: "warm low, blackout drawn",
-      scent: "cedar & wildflower",
+      scent: input.intake.scent ?? "lavender bundle on nightstand",
       amenities: [
         `${propertyName}'s valley honey & chamomile`,
         "Magnesium tea service at turndown",
         "Eucalyptus shower bundle",
+        "Heated mattress pad — pre-warmed",
       ],
       soundtrack: "soft acoustic, low volume",
       avoidInRoom: ["champagne welcome", "loud floral spray"],
@@ -432,6 +483,23 @@ function fallbackBrief(input: BriefInput): ArrivalBrief {
       line: "Welcome back. We held a quiet table at the garden, or we can send something light to your room — whichever helps.",
       options: ["Garden table, 7pm", "Light room service, any time"],
     },
+    experiencesToPrep: [
+      {
+        experience: "Asaya recovery treatment",
+        when: "Friday afternoon, 4pm",
+        prepNote: "Book the quiet room; therapist Eun has her file from Crillon.",
+      },
+      {
+        experience: "Oak grove walk (15-min loop)",
+        when: "Friday late morning",
+        prepNote: "Grounds team: check the bend path is clear; she mentioned overgrowth at her last stay.",
+      },
+      {
+        experience: "Wine tasting",
+        when: "Moved to Saturday evening (per guest)",
+        prepNote: "Notify sommelier Inez; not Thursday.",
+      },
+    ],
     staffDo: [
       "Keep check-in concise — no amenity tour tonight",
       "Offer the room option first, dining as a soft alternate",
@@ -443,6 +511,9 @@ function fallbackBrief(input: BriefInput): ArrivalBrief {
       "Do not mention sleep, recovery, or any wellness terminology",
       "Do not schedule an early breakfast",
     ],
+    comfortLine: hasCycleComfort
+      ? "Comfort mode requested: warmer room (69°F), heated mattress pad pre-warmed, no harsh morning movement Thursday or Friday. No further detail beyond this line."
+      : null,
     delightMomentIdea: "A small note in her handwriting-style font: 'A slower morning is held for you.'",
     senseOfPlaceLine: `${propertyName} as restoration: the oak grove walk and the still water of the garden, on her pace.`,
   };

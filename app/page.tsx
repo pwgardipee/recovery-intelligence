@@ -208,16 +208,22 @@ function StayRow({
       </div>
       <div className="flex items-center gap-2">
         <Link
-          href={`/stay/${stayId}/connect`}
+          href={`/user/stays/${stayId}`}
           className="rounded-sm border border-line bg-paper px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-ink-soft hover:text-forest"
         >
           Guest view
         </Link>
         <Link
           href={`/admin/stays/${stayId}`}
+          className="rounded-sm border border-line bg-paper px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-ink-soft hover:text-forest"
+        >
+          Staff view
+        </Link>
+        <Link
+          href={`/control/${stayId}`}
           className="rounded-sm bg-forest px-4 py-1.5 text-[11px] uppercase tracking-[0.18em] text-cream hover:bg-forest-deep"
         >
-          Open concierge thread →
+          Open remote →
         </Link>
       </div>
     </div>

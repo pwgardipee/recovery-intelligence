@@ -155,16 +155,21 @@ async function runScene1IntakeArrives(stayId: number): Promise<void> {
   const transcript = `
 Hi Rosewood team — thank you for the note. A few thoughts:
 
-I'm flying in red-eye Thursday and have a board dinner Friday night, so
-I'd love a slow Thursday evening — quiet, no champagne, no big welcome.
-Light dinner in the room is perfect. I sleep cooler than most.
+My flight is AA 8 from JFK landing SFO Thursday around 7:42am (red-eye).
+Board dinner Friday night, so I'd love a slow Thursday evening — quiet,
+no champagne, no big welcome. Light dinner in the room is perfect.
+I sleep cooler than most, but please flag cycle-aware comfort if that's
+an option — would mean a slightly warmer room and gentler pacing the
+first two days.
 
-Mornings can be late on Friday. I love long garden walks but not anything
-intense before the dinner. I'd skip the wine tasting Thursday — push it
-to Saturday if there's room?
+Experiences I'd love during the stay: Asaya recovery (Friday afternoon
+would be ideal), a long garden / oak grove walk, and the wine tasting if
+you can move it to Saturday. Please don't schedule anything intense
+before the Friday dinner.
 
-Texts > calls, please. And the lavender scent in the room last time at
-Crillon was lovely — anything like that.
+Mornings can be late on Friday — anything after 9 is great. Texts > calls,
+please. And the lavender scent in the room last time at Crillon was
+lovely — anything like that.
 
 Maya
 `.trim();
@@ -213,8 +218,13 @@ Maya
       contactPreference: intake.contactPreference,
       scent: intake.scent,
       occasion: intake.occasion,
+      experiencesRequested: intake.experiencesRequested,
+      flight: intake.flight,
+      comfortFlags: intake.comfortFlags,
       summary: intake.summary,
       propertyName: property.name,
+      sourceLabel: "From the 7-day pre-arrival email reply",
+      originalText: transcript,
     },
   });
 
