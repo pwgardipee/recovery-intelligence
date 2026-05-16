@@ -12,6 +12,9 @@ import {
   boolean,
 } from "drizzle-orm/pg-core";
 
+// Re-export Rosewood Rhythm tables so the Drizzle client knows about them.
+export * from "./rhythm-schema";
+
 /**
  * Drizzle schema for Recovery Intelligence.
  *

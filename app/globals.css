@@ -1,26 +1,303 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+ * Rose — Rosewood's state-aware concierge
+ *
+ * Design tokens + motion language. Two principles:
+ *   1. Surfaces feel like paper and oil, not glass and chrome.
+ *   2. Motion is slow and confident — no kinetic UI, no flickers, no chrome
+ *      transitions. Everything settles. The eye rests.
+ * ------------------------------------------------------------------------ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surfaces */
+  --rw-ivory: #f6f1e7;
+  --rw-cream: #ece4d3;
+  --rw-paper: #ffffff;
+  --rw-shadow: rgba(38, 33, 26, 0.08);
+
+  /* Inks */
+  --rw-ink: #1f1c17;
+  --rw-ink-soft: #4a443b;
+  --rw-ink-muted: #8a8276;
+
+  /* Brand */
+  --rw-forest: #2c3a2e;
+  --rw-forest-deep: #1d2820;
+  --rw-moss: #5a6b4d;
+  --rw-gold: #b08948;
+  --rw-gold-soft: #d6b674;
+  --rw-rose: #c89a8c;
+  --rw-clay: #a76e57;
+
+  /* Threading */
+  --rw-line: rgba(31, 28, 23, 0.12);
+  --rw-line-soft: rgba(31, 28, 23, 0.06);
+
+  /* Status */
+  --rw-emerald: #4f7d54;
+  --rw-amber: #c8923c;
+  --rw-rust: #a8513d;
+
+  /* Motion — the breath of the system */
+  --rw-ease: cubic-bezier(0.22, 1, 0.36, 1);       /* gentle out-cubic */
+  --rw-ease-soft: cubic-bezier(0.4, 0, 0.2, 1);     /* iOS-ish out */
+  --rw-dur-fast: 240ms;
+  --rw-dur-base: 420ms;
+  --rw-dur-slow: 720ms;
+  --rw-dur-breath: 1100ms;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ivory: var(--rw-ivory);
+  --color-cream: var(--rw-cream);
+  --color-paper: var(--rw-paper);
+  --color-ink: var(--rw-ink);
+  --color-ink-soft: var(--rw-ink-soft);
+  --color-ink-muted: var(--rw-ink-muted);
+  --color-forest: var(--rw-forest);
+  --color-forest-deep: var(--rw-forest-deep);
+  --color-moss: var(--rw-moss);
+  --color-gold: var(--rw-gold);
+  --color-gold-soft: var(--rw-gold-soft);
+  --color-rose: var(--rw-rose);
+  --color-clay: var(--rw-clay);
+  --color-line: var(--rw-line);
+  --color-line-soft: var(--rw-line-soft);
+  --color-emerald: var(--rw-emerald);
+  --color-amber: var(--rw-amber);
+  --color-rust: var(--rw-rust);
+  --font-serif: var(--font-cormorant), Garamond, "Times New Roman", serif;
+  --font-display: var(--font-italiana), var(--font-cormorant), serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background: var(--rw-ivory);
+  color: var(--rw-ink);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: 0.005em;
+  animation: rw-page-enter var(--rw-dur-slow) var(--rw-ease) both;
+}
+
+/* Universal smooth feel on every interactive surface. */
+a,
+button,
+input,
+select,
+textarea,
+.rw-card,
+.rw-bubble-ai,
+.rw-bubble-staff,
+.rw-bubble-guest-incoming,
+.rw-bubble-guest-outgoing,
+.rw-tag {
+  transition:
+    background-color var(--rw-dur-fast) var(--rw-ease),
+    border-color var(--rw-dur-fast) var(--rw-ease),
+    color var(--rw-dur-fast) var(--rw-ease),
+    box-shadow var(--rw-dur-base) var(--rw-ease),
+    transform var(--rw-dur-base) var(--rw-ease),
+    opacity var(--rw-dur-base) var(--rw-ease);
+}
+
+/* Display headings get the elegant serif. */
+.font-display {
+  font-family: var(--font-italiana), var(--font-cormorant), serif;
+  letter-spacing: 0.01em;
+}
+
+.font-serif {
+  font-family: var(--font-cormorant), Garamond, serif;
+}
+
+/* Subtle gold rule used inside cards. */
+.rw-rule {
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--rw-gold) 30%,
+    var(--rw-gold) 70%,
+    transparent
+  );
+  height: 1px;
+  width: 48px;
+}
+
+/* Paper card — the canonical surface for rich messages and screens. */
+.rw-card {
+  background: var(--rw-paper);
+  border: 1px solid var(--rw-line);
+  border-radius: 4px;
+  box-shadow:
+    0 1px 0 var(--rw-line-soft),
+    0 14px 36px -18px var(--rw-shadow);
+}
+
+/* Tag pill for amenity / sense-of-place items. */
+.rw-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid var(--rw-line);
+  background: var(--rw-cream);
+  color: var(--rw-ink-soft);
+  border-radius: 9999px;
+}
+
+/* Do / Do-not card stripes. */
+.rw-do {
+  border-left: 2px solid var(--rw-moss);
+}
+.rw-donot {
+  border-left: 2px solid var(--rw-clay);
+}
+
+/* Bubble bases for the chat threads. */
+.rw-bubble-ai {
+  background: var(--rw-paper);
+  border: 1px solid var(--rw-line);
+  color: var(--rw-ink);
+  border-radius: 2px 16px 16px 16px;
+}
+.rw-bubble-staff {
+  background: var(--rw-forest);
+  color: #f4efe4;
+  border-radius: 16px 16px 4px 16px;
+}
+.rw-bubble-guest-incoming {
+  background: var(--rw-cream);
+  color: var(--rw-ink);
+  border-radius: 4px 18px 18px 18px;
+  box-shadow: 0 1px 0 var(--rw-line-soft);
+}
+.rw-bubble-guest-outgoing {
+  background: var(--rw-forest);
+  color: #f4efe4;
+  border-radius: 18px 18px 4px 18px;
+}
+
+/* Slow, breathing pulse — used as a live-state indicator. */
+.rw-pulse {
+  position: relative;
+}
+.rw-pulse::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.3;
+  animation: rw-pulse var(--rw-dur-breath) var(--rw-ease) infinite;
+}
+@keyframes rw-pulse {
+  0% { transform: scale(0.55); opacity: 0.45; }
+  70% { transform: scale(1.6); opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Slow entrance for new chat items. */
+@keyframes rw-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+.rw-enter {
+  animation: rw-fade-up var(--rw-dur-slow) var(--rw-ease) both;
+}
+
+/* A whole-page entrance — gentle, no movement, just an opening. */
+@keyframes rw-page-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Breathing hero ornaments. */
+@keyframes rw-breathe {
+  0%, 100% { opacity: 0.32; }
+  50% { opacity: 0.46; }
+}
+.rw-breathe {
+  animation: rw-breathe 8s ease-in-out infinite;
+}
+
+/* Inner element stagger — used inside the arrival brief card so its
+   sections reveal in order, like a hand laying down each item. */
+.rw-stagger > * {
+  opacity: 0;
+  animation: rw-fade-up var(--rw-dur-slow) var(--rw-ease) both;
+}
+.rw-stagger > *:nth-child(1) { animation-delay: 60ms; }
+.rw-stagger > *:nth-child(2) { animation-delay: 200ms; }
+.rw-stagger > *:nth-child(3) { animation-delay: 340ms; }
+.rw-stagger > *:nth-child(4) { animation-delay: 480ms; }
+.rw-stagger > *:nth-child(5) { animation-delay: 620ms; }
+.rw-stagger > *:nth-child(6) { animation-delay: 760ms; }
+.rw-stagger > *:nth-child(7) { animation-delay: 900ms; }
+
+/* Custom scrollbar so chat panes feel intentional, not chrome. */
+.rw-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.rw-scroll::-webkit-scrollbar-thumb {
+  background: var(--rw-line);
+  border-radius: 9999px;
+}
+.rw-scroll::-webkit-scrollbar-thumb:hover { background: var(--rw-ink-muted); }
+.rw-scroll {
+  scroll-behavior: smooth;
+  scrollbar-color: var(--rw-line) transparent;
+}
+
+/* Logo monogram — the RW wordmark. */
+.rw-monogram {
+  font-family: var(--font-italiana), serif;
+  letter-spacing: 0.18em;
+  font-weight: 400;
+}
+
+/* Buttons — softer hover, no harsh scale. */
+button:not(:disabled):hover {
+  transform: translateY(-0.5px);
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Cards lift gently on hover. */
+.rw-card:hover {
+  box-shadow:
+    0 1px 0 var(--rw-line-soft),
+    0 22px 50px -20px var(--rw-shadow);
+}
+
+/* Honor reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
