@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -13,6 +13,9 @@ import {
   signals,
   stays,
 } from "@/lib/db/rhythm-schema";
+import { whoopConnections } from "@/lib/db/schema";
+import { buildWhoopSnapshot, type WhoopSnapshot } from "@/lib/whoop/snapshot";
+import { translateWhoopSnapshotToHospitality } from "@/lib/ai/prompts";
 
 import { StaffThread } from "./message-renderer";
 import { type AdminStayTab, TabNav, parseTab } from "./tab-nav";
@@ -86,6 +89,57 @@ export default async function AdminStayPage({
   const activeConsent = allConsents.find((c) => c.active) ?? allConsents[0];
   const intakeAnswerData = (latestIntake?.answers ?? null) as IntakeShape | null;
 
+  // Latest arrival brief — the AI's authoritative one-line read of this guest.
+  // We surface guestState + comfortLine + delightMomentIdea on the Overview.
+  const latestBrief = [...staffMessages]
+    .reverse()
+    .find((m) => m.kind === "arrival_brief");
+  const briefContent = latestBrief?.content as
+    | { brief?: BriefShape; revision?: string }
+    | undefined;
+  const brief = briefContent?.brief ?? null;
+  const briefRevision = briefContent?.revision ?? null;
+  const briefAt = latestBrief?.createdAt ?? null;
+
+  // Voice calls — every call rendered as a compact card on the Overview so
+  // staff see the actual content of what Rose heard from the guest.
+  const voiceCalls = staffMessages
+    .filter((m) => m.kind === "voice_call")
+    .map((m) => ({
+      id: m.id,
+      at: m.createdAt,
+      content: m.content as VoiceCallContent,
+    }))
+    .sort((a, b) => b.at.getTime() - a.at.getTime());
+
+  // Whoop snapshot. Resolve the user via either the consent record (preferred)
+  // or — when the consent row predates the whoop_user_id column or never had
+  // a per-stay cookie — fall back to the most-recent unrevoked connection
+  // for this project. Mirrors /api/whoop/refresh-snapshot's auto-link rules.
+  const consentWhoopUserId =
+    allConsents.find((c) => c.active && c.source === "whoop")?.whoopUserId ??
+    null;
+  let whoopSnapshot: WhoopSnapshot | null = null;
+  if (consentWhoopUserId) {
+    whoopSnapshot = await buildWhoopSnapshot(consentWhoopUserId);
+  } else {
+    const [latestConn] = await db
+      .select({ whoopUserId: whoopConnections.whoopUserId })
+      .from(whoopConnections)
+      .where(isNull(whoopConnections.revokedAt))
+      .orderBy(desc(whoopConnections.connectedAt))
+      .limit(1);
+    if (latestConn) {
+      whoopSnapshot = await buildWhoopSnapshot(latestConn.whoopUserId);
+    }
+  }
+  const cycleComfortMode = Boolean(
+    intakeAnswerData?.comfortFlags?.includes("cycle_comfort"),
+  );
+  const whoopHospitality = whoopSnapshot
+    ? translateWhoopSnapshotToHospitality(whoopSnapshot, { cycleComfortMode })
+    : null;
+
   return (
     <main className="flex min-h-screen flex-col bg-ivory">
       {/* Top bar — unchanged identity */}
@@ -153,6 +207,16 @@ export default async function AdminStayPage({
             voiceCallCount={
               staffMessages.filter((m) => m.kind === "voice_call").length
             }
+            brief={brief}
+            briefRevision={briefRevision}
+            briefAt={briefAt ? briefAt.toISOString() : null}
+            voiceCalls={voiceCalls.map((c) => ({
+              id: c.id,
+              at: c.at.toISOString(),
+              content: c.content,
+            }))}
+            whoop={whoopHospitality}
+            whoopSnapshot={whoopSnapshot}
           />
         )}
 
@@ -192,7 +256,13 @@ function OverviewTab({
   intake,
   memory,
   staffPendingCount,
-  voiceCallCount,
+  voiceCallCount: _voiceCallCount,
+  brief,
+  briefRevision,
+  briefAt,
+  voiceCalls,
+  whoop,
+  whoopSnapshot,
 }: {
   stay: typeof stays.$inferSelect;
   guest: typeof guests.$inferSelect;
@@ -202,9 +272,13 @@ function OverviewTab({
   memory: (typeof memoryFacts.$inferSelect)[];
   staffPendingCount: number;
   voiceCallCount: number;
+  brief: BriefShape | null;
+  briefRevision: string | null;
+  briefAt: string | null;
+  voiceCalls: { id: number; at: string; content: VoiceCallContent }[];
+  whoop: ReturnType<typeof translateWhoopSnapshotToHospitality> | null;
+  whoopSnapshot: WhoopSnapshot | null;
 }) {
-  const activeConsents = consents.filter((c) => c.active);
-
   return (
     <div className="space-y-8">
       {/* Stat strip */}
@@ -221,12 +295,86 @@ function OverviewTab({
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Left: AI brief + vibe */}
         <Section title="What we know">
-          {intake?.summary ? (
+          {/* Lead with the AI's authoritative one-line read, which is built
+              from intake + Whoop snapshot + memory by Claude on every brief
+              regen (post-email, post-call, post-Whoop-refresh). */}
+          {brief?.guestState ? (
+            <>
+              <p className="font-serif text-[15px] leading-relaxed text-ink-soft">
+                {brief.guestState}
+              </p>
+              <p className="mt-1.5 text-[10.5px] uppercase tracking-[0.2em] text-ink-muted">
+                {briefRevision === "after_call"
+                  ? "Refined after pre-arrival call"
+                  : briefRevision === "after_email"
+                    ? "From the pre-arrival email"
+                    : "Latest brief"}
+                {briefAt ? ` · ${formatStamp(new Date(briefAt))}` : ""}
+              </p>
+              {brief.comfortLine && (
+                <p className="font-serif mt-3 text-[13.5px] italic text-moss">
+                  {brief.comfortLine}
+                </p>
+              )}
+              {brief.delightMomentIdea && (
+                <p className="font-serif mt-3 text-[13px] italic text-gold">
+                  {brief.delightMomentIdea}
+                </p>
+              )}
+            </>
+          ) : intake?.summary ? (
             <p className="font-serif text-[15px] leading-relaxed text-ink-soft">
               {intake.summary}
             </p>
           ) : (
             <EmptyLine text="No intake captured yet." />
+          )}
+
+          {/* Whoop signal — translated to hospitality language; never raw. */}
+          {whoop && whoopSnapshot?.hasAnyData && (
+            <div className="mt-5 rounded-sm border border-line bg-cream/40 px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
+                Whoop signal · translated
+              </p>
+              <ul className="mt-2 space-y-1 text-[13px] text-ink">
+                {whoop.workoutLine && (
+                  <li>
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-emerald">
+                      Workout
+                    </span>{" "}
+                    <span className="text-ink-soft">{whoop.workoutLine}</span>
+                  </li>
+                )}
+                {whoop.refuelCue && (
+                  <li className="text-[12.5px] italic text-clay">
+                    {whoop.refuelCue}
+                  </li>
+                )}
+                {whoop.sleepLine && (
+                  <li>
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-moss">
+                      Rest
+                    </span>{" "}
+                    <span className="text-ink-soft">{whoop.sleepLine}</span>
+                  </li>
+                )}
+                {whoop.energyLine && (
+                  <li>
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-gold">
+                      Energy
+                    </span>{" "}
+                    <span className="text-ink-soft">{whoop.energyLine}</span>
+                  </li>
+                )}
+                {!whoop.workoutLine &&
+                  !whoop.sleepLine &&
+                  !whoop.energyLine && (
+                    <li className="font-serif text-[13px] italic text-ink-muted">
+                      Connected · no notable signals yet.
+                    </li>
+                  )}
+              </ul>
+            </div>
           )}
 
           {intake && (
@@ -310,6 +458,28 @@ function OverviewTab({
           </div>
         </Section>
       </div>
+
+      {/* From the calls — surfaces what Rose actually heard from the guest */}
+      <Section title={`From the calls (${voiceCalls.length})`}>
+        {voiceCalls.length === 0 ? (
+          <EmptyLine text="No calls recorded yet." />
+        ) : (
+          <ul className="space-y-3">
+            {voiceCalls.slice(0, 4).map((call) => (
+              <VoiceCallCard
+                key={call.id}
+                at={new Date(call.at)}
+                content={call.content}
+              />
+            ))}
+            {voiceCalls.length > 4 && (
+              <li className="text-[12px] text-ink-muted">
+                +{voiceCalls.length - 4} more — see the History tab.
+              </li>
+            )}
+          </ul>
+        )}
+      </Section>
 
       {/* Memory carryover */}
       <Section title="Memory carryover">
@@ -787,6 +957,67 @@ function ConsentChip({
   );
 }
 
+function VoiceCallCard({
+  at,
+  content,
+}: {
+  at: Date;
+  content: VoiceCallContent;
+}) {
+  const turns = (content.transcript ?? []).slice(-4);
+  return (
+    <li className="rounded-sm border border-line bg-paper px-4 py-3">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="rounded-full bg-clay/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-clay">
+          {content.label ?? "Voice call"}
+        </span>
+        {content.direction && (
+          <span className="text-[10.5px] uppercase tracking-[0.18em] text-ink-muted">
+            {content.direction}
+          </span>
+        )}
+        {content.to && (
+          <span className="text-[12px] text-ink-soft">→ {content.to}</span>
+        )}
+        {content.duration && (
+          <span className="text-[11.5px] text-ink-muted">
+            · {content.duration}
+          </span>
+        )}
+        <span className="ml-auto text-[10.5px] uppercase tracking-[0.18em] text-ink-muted">
+          {formatStamp(at)}
+        </span>
+      </div>
+      {content.summary && (
+        <p className="font-serif mt-2 text-[13.5px] italic text-ink-soft">
+          {content.summary}
+        </p>
+      )}
+      {turns.length > 0 && (
+        <ul className="mt-3 space-y-1.5 border-t border-line-soft pt-3">
+          {turns.map((t, i) => (
+            <li
+              key={i}
+              className="text-[12.5px] leading-5 text-ink"
+            >
+              <span
+                className={`mr-2 text-[10px] uppercase tracking-[0.2em] ${
+                  t.who.toLowerCase().includes("rose")
+                    ? "text-gold"
+                    : "text-forest"
+                }`}
+              >
+                {t.who}
+              </span>
+              {t.line}
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
 function MemoryChip({ count }: { count: number }) {
   return (
     <span className="flex items-center gap-2 rounded-full border border-line bg-paper px-3 py-1 text-[10.5px] uppercase tracking-[0.2em] text-ink-soft">
@@ -799,6 +1030,29 @@ function MemoryChip({ count }: { count: number }) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+interface BriefShape {
+  guestState?: string | null;
+  serviceMode?: "low_touch" | "balanced" | "warm_attentive" | null;
+  comfortLine?: string | null;
+  delightMomentIdea?: string | null;
+  senseOfPlaceLine?: string | null;
+  roomPrep?: {
+    temperatureF?: number;
+    amenities?: string[];
+  };
+  firstOffer?: { line?: string; options?: string[] };
+}
+
+interface VoiceCallContent {
+  direction?: "inbound" | "outbound";
+  to?: string;
+  audioUrl?: string | null;
+  duration?: string;
+  label?: string;
+  summary?: string;
+  transcript?: Array<{ who: string; line: string }>;
+}
 
 interface IntakeShape {
   arrivalVibe?: string | null;

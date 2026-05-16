@@ -1,22 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
   guests,
   intakeAnswers,
-  memoryFacts,
   messages,
   properties,
-  signals,
   stays,
 } from "@/lib/db/rhythm-schema";
-import {
-  generateArrivalBrief,
-  interpretIntake,
-  translateSignalsToHospitality,
-} from "@/lib/ai/prompts";
+import { interpretIntake } from "@/lib/ai/prompts";
+import { regenerateArrivalBrief } from "@/lib/rhythm/scenes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -129,75 +124,16 @@ export async function POST(req: NextRequest) {
   //
   // Step 2 (email submit) → first brief lands in the staff thread.
   // Step 3 (call ends)    → brief is replaced with a richer version that
-  //                         folds in everything Rose learned on the call.
-  // We replace rather than append so the thread always shows ONE
-  // authoritative brief; the audience sees it appear after email and
-  // refine after the call.
+  //                         folds in everything Rose learned on the call
+  //                         AND the latest Whoop snapshot (sleep, recent
+  //                         workouts, recovery band).
+  // We use the shared regenerateArrivalBrief() so this code path stays in
+  // sync with /api/whoop/refresh-snapshot — both produce ONE Whoop-aware
+  // brief that the audience sees appear after email and refine after call.
   // ---------------------------------------------------------------------
 
-  await db
-    .delete(messages)
-    .where(
-      and(
-        eq(messages.stayId, body.stayId),
-        eq(messages.kind, "arrival_brief"),
-      ),
-    );
-
   try {
-    const guestSignals = await db
-      .select()
-      .from(signals)
-      .where(eq(signals.guestId, stay.guestId))
-      .orderBy(asc(signals.capturedAt))
-      .limit(5);
-
-    const signalSummary =
-      guestSignals
-        .map((s) =>
-          translateSignalsToHospitality(s.payload as Record<string, unknown>),
-        )
-        .join(" ") || "no notable signals; default to balanced pacing.";
-
-    const memoryRows = await db
-      .select()
-      .from(memoryFacts)
-      .where(eq(memoryFacts.guestId, stay.guestId))
-      .limit(12);
-
-    const brief = await generateArrivalBrief({
-      guest: {
-        name: guest.name,
-        occasion: stay.occasion,
-        mergedProfileCount: guest.mergedProfileCount,
-        contactPreference: guest.contactPreference,
-      },
-      property: {
-        name: property.name,
-        city: property.city,
-        senseOfPlace: property.senseOfPlace as Record<string, unknown>,
-      },
-      intake,
-      signalSummary,
-      memoryFacts: memoryRows.map((r) => ({ fact: r.fact, kind: r.kind })),
-    });
-
-    await db
-      .update(stays)
-      .set({ roomTempF: brief.roomPrep.temperatureF })
-      .where(eq(stays.id, stay.id));
-
-    await appendMessage(body.stayId, "staff", {
-      author: "rose",
-      authorRole: "ai",
-      kind: "arrival_brief",
-      content: {
-        brief,
-        propertyName: property.name,
-        guestName: guest.name,
-        revision: body.source === "pre_call" ? "after_call" : "after_email",
-      },
-    });
+    await regenerateArrivalBrief(body.stayId);
   } catch (err) {
     console.error("[intake/from-call] brief generation failed", err);
   }
